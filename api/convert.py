@@ -7,6 +7,7 @@ Returns JSON: {"markdown": "...", "meta": {...}}
 
 import json
 import os
+import re
 import sys
 import traceback
 from http.server import BaseHTTPRequestHandler
@@ -22,6 +23,39 @@ import x2md
 # that the worst-case chain (up to 4 providers) stays inside Vercel's limit.
 _CLIENT_TIMEOUT = 15.0
 _CLIENT_RETRIES = 1
+
+
+def _media_for(document: "x2md.Document") -> list:
+    """Flatten every post's media into download-ready entries.
+
+    Each item gets a deterministic filename ``<handle>_<postid>_p<post>_<i>.<ext>``
+    and a ``download_url`` already resolved to the best asset: the original image
+    for photos, the mp4 for videos and gifs.
+    """
+    handle = document.author.handle or "x"
+    safe_handle = re.sub(r"[^A-Za-z0-9_]", "", handle) or "x"
+    media = []
+    for post_index, post in enumerate(document.posts, start=1):
+        post_id = post.post_id or document.status_id
+        for item_index, item in enumerate(post.media, start=1):
+            if item.kind == "image":
+                download_url = x2md.upgrade_image_url(item.url)
+                ext = "jpg"
+            else:  # video or gif
+                download_url = item.video_url or x2md.upgrade_image_url(item.url)
+                ext = "mp4"
+            if not download_url:
+                continue
+            filename = "%s_%s_p%d_%d.%s" % (safe_handle, post_id, post_index, item_index, ext)
+            media.append(
+                {
+                    "kind": item.kind,
+                    "alt": item.alt or "",
+                    "filename": filename,
+                    "download_url": download_url,
+                }
+            )
+    return media
 
 
 def _convert(url: str) -> dict:
@@ -48,6 +82,7 @@ def _convert(url: str) -> dict:
             "warnings": document.warnings,
             "provider": document.provider,
         },
+        "media": _media_for(document),
     }
 
 

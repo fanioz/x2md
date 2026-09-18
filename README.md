@@ -29,7 +29,7 @@ Optional extras: none. Every retrieval strategy uses `urllib` from the standard 
 
 ## Web app
 
-A public web UI is included. Paste any X/Twitter URL or post ID and get the same clean Markdown output, ready to copy or download.
+A public web UI is included. Paste any X/Twitter URL or post ID and get the same clean Markdown output, ready to copy or download. Images and videos attached to the post (or thread) can be downloaded individually or as a single ZIP — original-resolution images and mp4 sources for videos/GIFs.
 
 ```
 https://x2md.vercel.app

@@ -39,3 +39,5 @@ This file captures the language of the x2md project. It is a glossary, not a spe
 - **Warnings**: Non-fatal messages about the conversion, such as a provider being unable to enumerate a full thread. Shown in the UI but do not block the result.
 
 - **Provider name**: The provider that ultimately produced the Document, exposed in the web app so a visitor can see which strategy succeeded.
+
+- **Media download**: A web-only capability letting a visitor retrieve the original image or video files referenced by a Document. Each file is named deterministically as `<handle>_<postid>_p<post>_<index>.<ext>` and offered both as individual download links and as a single ZIP bundle. The CLI has no equivalent. Images download at original resolution; videos and GIFs download as their mp4 source.

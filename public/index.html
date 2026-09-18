@@ -39,6 +39,14 @@
       </div>
       <textarea id="output" class="output" readonly rows="16" aria-label="Converted Markdown"></textarea>
       <div id="meta" class="meta"></div>
+
+      <section id="media" class="media" hidden>
+        <div class="media-header">
+          <h2 id="media-title">Media</h2>
+          <button id="download-all" class="button-secondary" type="button">Download all (.zip)</button>
+        </div>
+        <ul id="media-list" class="media-list"></ul>
+      </section>
     </section>
   </main>
 
@@ -46,6 +54,7 @@
     <a href="https://github.com/fanioz/x2md">x2md on GitHub</a>
   </footer>
 
+  <script src="vendor/jszip.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
