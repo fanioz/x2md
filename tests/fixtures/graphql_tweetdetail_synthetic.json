@@ -1,0 +1,92 @@
+{
+  "_comment": "SYNTHETIC fixture, not a live capture. Mirrors the documented TweetDetail response shape (data.threaded_conversation_with_injections_v2.instructions[].entries[].content.itemContent.tweet_results.result) with two posts forming a self-thread. It exists so the GraphQL normalizer has regression coverage offline; the live GraphQL path is NOT verified. See README 'known limitations'.",
+  "data": {
+    "threaded_conversation_with_injections_v2": {
+      "instructions": [
+        {
+          "type": "TimelineAddEntries",
+          "entries": [
+            {
+              "entryId": "tweet-1001",
+              "content": {
+                "entryType": "TimelineTimelineItem",
+                "itemContent": {
+                  "itemType": "TimelineTweet",
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1001",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "legacy": {
+                              "screen_name": "alice",
+                              "name": "Alice Example",
+                              "id_str": "42"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "id_str": "1001",
+                        "full_text": "Post one of a two part thread",
+                        "created_at": "Wed Jul 01 10:00:00 +0000 2026",
+                        "lang": "en",
+                        "favorite_count": 10,
+                        "retweet_count": 2,
+                        "reply_count": 1,
+                        "quote_count": 0,
+                        "bookmark_count": 3,
+                        "in_reply_to_screen_name": null
+                      },
+                      "views": {"count": "500"}
+                    }
+                  }
+                }
+              }
+            },
+            {
+              "entryId": "tweet-1002",
+              "content": {
+                "entryType": "TimelineTimelineItem",
+                "itemContent": {
+                  "itemType": "TimelineTweet",
+                  "tweet_results": {
+                    "result": {
+                      "__typename": "Tweet",
+                      "rest_id": "1002",
+                      "core": {
+                        "user_results": {
+                          "result": {
+                            "legacy": {
+                              "screen_name": "alice",
+                              "name": "Alice Example",
+                              "id_str": "42"
+                            }
+                          }
+                        }
+                      },
+                      "legacy": {
+                        "id_str": "1002",
+                        "full_text": "Post two of a two part thread",
+                        "created_at": "Wed Jul 01 10:01:00 +0000 2026",
+                        "lang": "en",
+                        "favorite_count": 4,
+                        "retweet_count": 0,
+                        "reply_count": 0,
+                        "quote_count": 0,
+                        "bookmark_count": 0,
+                        "in_reply_to_screen_name": "alice"
+                      },
+                      "views": {"count": "120"}
+                    }
+                  }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

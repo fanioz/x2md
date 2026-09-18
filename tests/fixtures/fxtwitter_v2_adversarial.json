@@ -1,0 +1,35 @@
+{
+ "code": 200,
+ "message": "OK",
+ "status": {
+  "type": "status",
+  "id": "1780000000000000002",
+  "url": "https://x.com/adv/status/1780000000000000002",
+  "text": "Adversarial: \"quotes\" and: colons\nand a newline <script>alert(1)</script> & an ampersand\n#tag @mention $CASH",
+  "raw_text": {
+   "text": "Adversarial: \"quotes\" and: colons\nand a newline <script>alert(1)</script> & an ampersand\n#tag @mention $CASH",
+   "display_text_range": [
+    0,
+    100
+   ],
+   "facets": []
+  },
+  "created_at": "2026-02-03T04:05:06.000Z",
+  "likes": 1,
+  "replies": 2,
+  "reposts": 3,
+  "views": 4,
+  "author": {
+   "screen_name": "adv",
+   "url": "https://x.com/adv",
+   "id": "900002",
+   "name": "Eve \"The: Injector\"\n</script><script>alert(2)</script>"
+  },
+  "lang": "en",
+  "media": null,
+  "poll": null,
+  "quote": null
+ },
+ "thread": [],
+ "code_expected": 200
+}

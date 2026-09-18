@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>x2md — X to Markdown</title>
+  <meta name="description" content="Convert X (Twitter) posts, threads, and articles to clean Markdown.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <h1>x2md</h1>
+    <p class="tagline">Convert an X post, thread, or article to clean Markdown.</p>
+
+    <form id="convert-form" class="form" novalidate>
+      <label for="url" class="sr-only">X or Twitter URL</label>
+      <input
+        type="text"
+        id="url"
+        name="url"
+        placeholder="https://x.com/handle/status/123… or just the post ID"
+        required
+        autocomplete="off"
+        aria-describedby="url-help"
+      >
+      <p id="url-help" class="help">Paste any x.com / twitter.com URL, or a plain numeric post ID.</p>
+      <button type="submit" id="submit" class="button-primary">Convert</button>
+    </form>
+
+    <div id="status" class="status" role="status" aria-live="polite" hidden></div>
+
+    <section id="result" class="result" hidden>
+      <div class="result-header">
+        <h2>Markdown</h2>
+        <div class="toolbar">
+          <button id="copy" class="button-secondary" type="button">Copy</button>
+          <button id="download" class="button-secondary" type="button">Download .md</button>
+        </div>
+      </div>
+      <textarea id="output" class="output" readonly rows="16" aria-label="Converted Markdown"></textarea>
+      <div id="meta" class="meta"></div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <a href="https://github.com/fanioz/x2md">x2md on GitHub</a>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

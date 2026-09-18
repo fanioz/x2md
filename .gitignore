@@ -1,0 +1,20 @@
+# Auth files hold real credentials and must never be committed.
+.x2md_auth.json
+*.auth.json
+
+# Generated Markdown output
+*.md.out
+out/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Vercel local state
+.vercel/
+
+# Node tooling (if ever added)
+node_modules/
+
+# Editor / session artifacts
+.zcode/
