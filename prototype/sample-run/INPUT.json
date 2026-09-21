@@ -1,0 +1,16 @@
+{
+  "startUrls": [
+    "https://x.com/jack/status/20",
+    "https://x.com/XCreators/status/2072439205213421694",
+    "https://x.com/imagine/status/2095249317875622255"
+  ],
+  "maxItems": 10,
+  "provider": "auto",
+  "downloadMedia": {
+    "images": true,
+    "videos": true,
+    "gifs": true,
+    "zip": true
+  },
+  "outputFormat": "both"
+}
