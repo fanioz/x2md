@@ -48,6 +48,48 @@ $ vercel dev
 
 The static frontend lives in `public/` and the API endpoint is `api/convert.py`.
 
+## Apify Actor
+
+The same core ships as an Apify Actor (`src/main.py`, config in `.actor/`):
+paste post, thread, or Article URLs and get one dataset item per URL with
+structured fields plus the full Markdown document. Original-resolution images
+and mp4 video/GIF sources can be uploaded to the key-value store (plus a ZIP
+bundle) via the granular `downloadMedia` toggles. No auth required; a
+Residential proxy is used for all requests.
+
+Input: `startUrls` (URLs or bare IDs, max 50 per run), `maxItems`,
+`provider` (`auto` default: fxtwitter, then vxtwitter, syndication,
+graphql), `downloadMedia` (`images`/`videos`/`gifs`/`zip`), `outputFormat`
+(`flat`/`nested`/`both`). Each dataset item carries post fields, thread
+metadata, `markdown`, media references with `fileKey`, `warnings`, and
+`provider` + `providerErrors`; total provider failure yields a
+`failedProviders` chain. Dataset charges use the `dataset-item`
+Pay-Per-Event event. Optional GraphQL auth via secret environment variables
+`X2MD_GRAPHQL_QUERY_ID`, `X2MD_AUTH_TOKEN`, `X2MD_CT0`, `X2MD_BEARER_TOKEN`
+(declared in `.actor/actor.json`); without them the graphql provider reports
+itself unavailable and the chain falls back.
+
+Run locally (needs the `apify` package; the SDK currently fails to import
+in this repo's system Python — see [Known limitations](#known-limitations--not-verified)):
+
+```console
+$ pip install -r requirements.txt
+$ mkdir -p storage/key_value_stores/default
+$ cat > storage/key_value_stores/default/INPUT.json <<'EOF'
+{"startUrls": ["https://x.com/jack/status/20"]}
+EOF
+$ apify run
+```
+
+Or exercise the mapping layer without the SDK or network:
+
+```console
+$ python3 -m unittest discover -s tests -p "test_actor*.py"
+$ python3 prototype/actor_sample_run.py
+```
+
+Deploy with `apify push` (actor name `x2md-twitter-post-scraper`).
+
 ## Usage
 
 ```
@@ -298,6 +340,22 @@ This section separates what was actually measured from what was not.
   is the poster thumbnail (as specified); the mp4 is a nested secondary link.
 * **Bold/italic facets are not rendered.** `raw_text.facets` can carry `bold` ranges; they are
   left as plain text.
+* **The Apify SDK cannot be imported in this repo's system Python.**
+  `pip install apify==2.7.3` resolves, but `from apify import Actor` raises
+  `TypeError: cannot specify both default and default_factory` inside
+  `crawlee/_types.py` via the `eval-type-backport` shim — reproduced on both
+  Python 3.9 and a fresh 3.14 venv, so it is an upstream dependency conflict,
+  not a local environment issue. Consequences: `src/main.py` (the thin SDK
+  wrapper) is covered only by a stub-Actor smoke test
+  (`tests/test_actor_main.py`), never executed against the real SDK, and no
+  live `apify run` or Docker build was performed here. The Docker image
+  (`apify/actor-python:3.9` + pinned `requirements.txt`) is expected to work
+  because the image ships its own tested dependency set; verify with
+  `apify run` on a machine with a working SDK before `apify push`.
+* **No live Actor run was performed.** All Actor outputs (dataset items,
+  Markdown, KV keys, ZIP) are validated offline against recorded fixtures
+  (`tests/test_actor*.py`, `prototype/actor_sample_run.py`). Live behaviour
+  against `api.fxtwitter.com` through the Apify Proxy is unverified.
 
 ### Legal / etiquette
 

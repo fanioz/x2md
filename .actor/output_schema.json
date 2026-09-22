@@ -1,0 +1,16 @@
+{
+  "actorOutputSchemaVersion": 1,
+  "title": "Output schema of the x2md Twitter post scraper",
+  "properties": {
+    "dataset": {
+      "type": "string",
+      "title": "Dataset",
+      "template": "{{links.apiDefaultDatasetUrl}}/items"
+    },
+    "files": {
+      "type": "string",
+      "title": "Media files",
+      "template": "{{links.apiDefaultKeyValueStoreUrl}}/keys"
+    }
+  }
+}

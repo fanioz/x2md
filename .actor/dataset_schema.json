@@ -1,0 +1,30 @@
+{
+  "actorSpecification": 1,
+  "fields": {
+    "type": "object",
+    "properties": {
+      "id": { "type": "string" },
+      "url": { "type": "string" },
+      "kind": { "type": "string" },
+      "provider": { "type": "string" },
+      "markdown": { "type": "string" }
+    }
+  },
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": ["url", "kind", "provider", "markdown"]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "url": { "label": "Post", "format": "link" },
+          "kind": { "label": "Kind", "format": "text" },
+          "provider": { "label": "Provider", "format": "text" },
+          "markdown": { "label": "Markdown", "format": "text" }
+        }
+      }
+    }
+  }
+}

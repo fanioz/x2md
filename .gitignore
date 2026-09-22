@@ -13,6 +13,9 @@ __pycache__/
 # Vercel local state
 .vercel/
 
+# Apify local run storage (INPUT.json may hold private URLs; datasets hold scraped content)
+storage/
+
 # Node tooling (if ever added)
 node_modules/
 

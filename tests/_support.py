@@ -41,6 +41,20 @@ def load_x2md():
 
 x2md = load_x2md()
 
+ACTOR_LIB_PY = X2MD_DIR / "src" / "actor_lib.py"
+
+
+def load_actor_lib():
+    """Import ``src/actor_lib.py`` by path (same pattern as :func:`load_x2md`)."""
+    existing = sys.modules.get("actor_lib")
+    if existing is not None and getattr(existing, "__file__", None) == str(ACTOR_LIB_PY):
+        return existing
+    spec = importlib.util.spec_from_file_location("actor_lib", ACTOR_LIB_PY)
+    module = importlib.util.module_from_spec(spec)
+    sys.modules["actor_lib"] = module
+    spec.loader.exec_module(module)
+    return module
+
 
 def _install_network_guard():
     """Make any real socket use raise, proving the suite is offline.
