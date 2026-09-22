@@ -1,0 +1,62 @@
+name: Apify build and push
+
+# Build, tag, and push the Actor to the Apify Store whenever `main` changes.
+# Requires `APIFY_TOKEN` to be set in Settings > Secrets and variables > Actions.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.9"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Verify SDK imports cleanly
+        run: python -c "from apify import Actor; print('apify SDK import OK')"
+
+      - name: Run offline test suite
+        env:
+          X2MD_TEST_BLOCK_NETWORK: "1"
+        run: |
+          cd tests
+          python -m unittest discover -s . -t .
+
+      - name: Build Actor image
+        run: docker build --no-cache --tag x2md-actor-test . 2>&1 | tee docker-build.log
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install Apify CLI
+        run: npm install -g apify-cli@1.7.1
+
+      - name: Push Actor to Apify
+        id: apify_push
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        run: |
+          apify push 2>&1 | tee apify-push.log
+
+      - name: Upload build and push logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: apify-build-and-push-logs
+          path: |
+            docker-build.log
+            apify-push.log

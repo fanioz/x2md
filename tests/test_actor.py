@@ -14,7 +14,13 @@ actor_lib = _support.load_actor_lib()
 
 STATUS_SIMPLE = "fxtwitter_v2_status_simple.json"
 THREAD5 = "fxtwitter_v2_thread5.json"
+THREAD_INCOMPLETE = "fxtwitter_v2_thread_incomplete.json"
+THREAD100 = "fxtwitter_v2_thread100.json"
 VIDEO = "fxtwitter_v2_video.json"
+POLL = "fxtwitter_v2_poll.json"
+QUOTE = "fxtwitter_v2_quote.json"
+ARTICLE = "fxtwitter_v2_article.json"
+ARTICLE_MEDIA = "fxtwitter_v2_article_media.json"
 
 BASE_INPUT = {
     "startUrls": ["https://x.com/jack/status/20"],
@@ -63,9 +69,15 @@ class ValidateInputTest(unittest.TestCase):
         with self.assertRaises(actor_lib.ActorInputError):
             actor_lib.validate_input({"startUrls": []})
 
-    def test_max_items_clamped_to_platform_limit(self):
+    def test_max_items_above_cap_is_rejected(self):
+        with self.assertRaises(actor_lib.ActorInputError):
+            actor_lib.validate_input(
+                {"startUrls": ["https://x.com/jack/status/20"], "maxItems": 500}
+            )
+
+    def test_max_items_at_cap_is_accepted(self):
         cleaned = actor_lib.validate_input(
-            {"startUrls": ["https://x.com/jack/status/20"], "maxItems": 500}
+            {"startUrls": ["https://x.com/jack/status/20"], "maxItems": 50}
         )
         self.assertEqual(cleaned["maxItems"], 50)
 
@@ -240,6 +252,124 @@ class RunBatchTest(unittest.TestCase):
         finally:
             _support.restore_http()
         self.assertTrue(any(k.startswith("zip/run_") for k in result["kv_keys"]))
+
+
+class ThreadCompletenessTest(unittest.TestCase):
+    def test_incomplete_self_reply_warns_thread_incomplete(self):
+        url = "https://x.com/threadsmith/status/1900000000000000041"
+        _support.install_fake_http(routes_for("1900000000000000041", THREAD_INCOMPLETE, THREAD_INCOMPLETE))
+        try:
+            item = actor_lib.fetch_one(url, BASE_INPUT)
+        finally:
+            _support.restore_http()
+        self.assertEqual(item["kind"], "thread")
+        self.assertIs(item["threadComplete"], False)
+        self.assertIn(actor_lib.WARNING_THREAD_INCOMPLETE, item["warnings"])
+        # The first post in the item is also marked incomplete.
+        self.assertIs(item["posts"][0]["threadComplete"], False)
+
+    def test_complete_thread_does_not_warn(self):
+        _support.install_fake_http(routes_for("2072439205213421694", THREAD5, THREAD5))
+        try:
+            item = actor_lib.fetch_one(THREAD_URL, BASE_INPUT)
+        finally:
+            _support.restore_http()
+        self.assertEqual(item["kind"], "thread")
+        self.assertIs(item["threadComplete"], True)
+        self.assertNotIn(actor_lib.WARNING_THREAD_INCOMPLETE, item["warnings"])
+
+    def test_max_items_caps_url_count(self):
+        """The 50-item cap limits how many startUrls are processed."""
+        url = "https://x.com/jack/status/20"
+        _support.install_fake_http(routes_for("20"))
+        try:
+            cleaned = actor_lib.validate_input(
+                {"startUrls": [url] * 60, "maxItems": 50}
+            )
+            result = actor_lib.run_batch(cleaned)
+        finally:
+            _support.restore_http()
+        self.assertEqual(len(result["items"]), actor_lib.MAX_ITEMS_HARD_CAP)
+
+    def test_hundred_post_thread_fits_in_memory(self):
+        """A 100-post thread maps without exhausting memory.
+
+        This test is informational: it verifies the fixture runs to completion
+        under the network guard, which is the real regression we care about.
+        Memory is logged in tracemalloc but not asserted because it varies by
+        interpreter and CI runner load.
+        """
+        import tracemalloc
+
+        url = "https://x.com/threadsmith/status/1900000000000000000"
+        _support.install_fake_http(
+            routes_for("1900000000000000000", THREAD100, THREAD100)
+        )
+        try:
+            tracemalloc.start()
+            item = actor_lib.fetch_one(url, BASE_INPUT)
+            current, peak = tracemalloc.get_traced_memory()
+            tracemalloc.stop()
+        finally:
+            _support.restore_http()
+        self.assertEqual(item["kind"], "thread")
+        self.assertEqual(len(item["posts"]), 100)
+        self.assertIs(item["threadComplete"], True)
+        # Informational; printed on failure to help manual triage.
+        self.assertLess(peak, 500 * 1024 * 1024, "peak memory unexpectedly high: %.1f MB" % (peak / 1024 / 1024))
+
+
+class PollQuoteArticleTest(unittest.TestCase):
+    def _fetch_doc(self, status_id, fixture):
+        """Fetch a document with FakeHttp active for both Actor and CLI paths."""
+        _support.install_fake_http(routes_for(status_id, fixture, fixture))
+        try:
+            url = "https://x.com/example/status/%s" % status_id
+            item = actor_lib.fetch_one(url, BASE_INPUT)
+            target = x2md.parse_target(url)
+            client = x2md.HttpClient()
+            providers = x2md.build_providers("auto", client, {})
+            doc, _ = x2md.fetch_document(target, providers, client)
+            return item, doc
+        finally:
+            _support.restore_http()
+
+    def test_poll_fields_match_cli(self):
+        item, doc = self._fetch_doc("1780000000000000001", POLL)
+        post = item["posts"][0]
+        self.assertIsNotNone(post["poll"])
+        self.assertIn("choices", post["poll"])
+        self.assertIn("total_votes", post["poll"])
+        cli_poll = x2md.document_to_json(doc)["posts"][0]["poll"]
+        self.assertEqual(post["poll"], cli_poll)
+
+    def test_quote_fields_match_cli(self):
+        item, doc = self._fetch_doc("2099922471272976442", QUOTE)
+        post = item["posts"][0]
+        self.assertIsNotNone(post["quote"])
+        self.assertIn("text", post["quote"])
+        self.assertIn("author", post["quote"])
+        cli_quote = x2md.document_to_json(doc)["posts"][0]["quote"]
+        self.assertEqual(post["quote"], cli_quote)
+
+    def test_article_fields_match_cli(self):
+        item, doc = self._fetch_doc("2097390372670575039", ARTICLE)
+        post = item["posts"][0]
+        self.assertIsNotNone(post["article"])
+        for key in ("id", "title", "preview_text", "created_at", "modified_at", "block_count"):
+            self.assertIn(key, post["article"])
+        cli_article = x2md.document_to_json(doc)["posts"][0]["article"]
+        self.assertEqual(post["article"], cli_article)
+
+    def test_article_with_media_keeps_cover_media_shape(self):
+        url = "https://x.com/example/status/2085835082166653393"
+        _support.install_fake_http(routes_for("2085835082166653393", ARTICLE_MEDIA, ARTICLE_MEDIA))
+        try:
+            item = actor_lib.fetch_one(url, BASE_INPUT)
+        finally:
+            _support.restore_http()
+        self.assertEqual(item["kind"], "article")
+        self.assertIsNotNone(item["posts"][0]["article"])
 
 
 if __name__ == "__main__":

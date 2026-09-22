@@ -8,10 +8,12 @@ Decisions (from wayfinder tickets #4/#5/#6):
 - input: ``startUrls`` (URLs or bare IDs, incl. requestListSources objects),
   ``maxItems`` (default 10, hard cap 50), ``provider`` (auto default with
   optional override), ``downloadMedia`` (granular images/videos/gifs/zip
-  toggles, all on by default), ``outputFormat`` (flat/nested/both).
+  toggles, all off by default), ``outputFormat`` (flat/nested/both).
 - output: one dataset item per URL — flat ``posts`` plus optional nested
   ``thread`` — with Markdown body, media refs incl. ``fileKey``, warnings,
-  and ``provider`` + ``providerErrors``. Total failure yields a
+  and ``provider`` + ``providerErrors``. Each post also carries ``poll``,
+  ``quote``, and ``article`` verbatim from :func:`x2md.document_to_json`, so
+  the Actor and ``x2md --json`` cannot disagree. Total failure yields a
   ``failedProviders`` chain instead.
 - media keys: ``<prefix>/<handle>_<postid>_<timestamp>_p<index>.<ext>``.
 """
@@ -29,6 +31,10 @@ import x2md
 
 MAX_ITEMS_HARD_CAP = 50
 DEFAULT_MAX_ITEMS = 10
+#: Machine-readable warning code prepended to ``warnings`` when x2md could not
+#: enumerate a whole self-thread. The prose warnings x2md emits explain *why*;
+#: this code exists so consumers can filter without string matching.
+WARNING_THREAD_INCOMPLETE = "thread_incomplete"
 VALID_PROVIDERS = ("auto", "fxtwitter", "vxtwitter", "syndication", "graphql")
 VALID_OUTPUT_FORMATS = ("flat", "nested", "both")
 MEDIA_TOGGLES = ("images", "videos", "gifs", "zip")
@@ -68,7 +74,10 @@ def validate_input(raw):
         raise ActorInputError("'maxItems' must be an integer.")
     if max_items < 1:
         raise ActorInputError("'maxItems' must be at least 1.")
-    max_items = min(max_items, MAX_ITEMS_HARD_CAP)
+    if max_items > MAX_ITEMS_HARD_CAP:
+        raise ActorInputError(
+            "'maxItems' cannot exceed %d (platform memory budget)." % MAX_ITEMS_HARD_CAP
+        )
 
     provider = raw.get("provider", "auto")
     if provider not in VALID_PROVIDERS:
@@ -159,9 +168,17 @@ def media_to_ref(item, handle, post_id, index, download_media, run_ts):
     return ref
 
 
-def post_to_payload(post, doc, position, download_media, run_ts):
+def post_to_payload(post, doc, position, download_media, run_ts, cli_post=None):
+    """Map one x2md ``Post`` onto its dataset-item shape.
+
+    ``cli_post`` is the matching entry from :func:`x2md.document_to_json` — the
+    exact structure ``x2md --json`` prints. The poll, quote, and article fields
+    are taken straight from it rather than re-derived here, so the Actor cannot
+    drift from the CLI on the three richest parts of a post.
+    """
+    cli_post = cli_post or {}
     stats = {}
-    for name in ("likes", "retweets", "replies", "quotes", "bookmarks"):
+    for name in ("likes", "retweets", "replies", "views", "quotes", "bookmarks"):
         value = getattr(post, name)
         if value is not None:
             stats[name] = value
@@ -172,11 +189,17 @@ def post_to_payload(post, doc, position, download_media, run_ts):
         "text": post.text,
         "author": {"handle": post.author.handle, "name": post.author.name, "avatarUrl": ""},
         "createdAt": post.created_at,
+        "lang": post.lang,
+        "isNoteTweet": post.is_note_tweet,
+        "isSelfReply": post.is_self_reply,
         "stats": stats,
         "kind": doc.kind,
         "threadPosition": position if doc.kind == "thread" else None,
         "threadComplete": doc.thread_complete if doc.kind == "thread" else None,
         "conversationId": doc.status_id if doc.kind == "thread" else None,
+        "poll": cli_post.get("poll"),
+        "quote": cli_post.get("quote"),
+        "article": cli_post.get("article"),
         "media": [
             media_to_ref(m, post.author.handle, post_id, i, download_media, run_ts)
             for i, m in enumerate(post.media)
@@ -186,10 +209,20 @@ def post_to_payload(post, doc, position, download_media, run_ts):
 
 
 def document_to_item(doc, errors, download_media, output_format, run_ts):
+    # One pass through x2md's own JSON serializer gives every post its CLI
+    # representation; post_to_payload reuses the poll/quote/article branches
+    # from it instead of duplicating that logic.
+    cli_posts = x2md.document_to_json(doc)["posts"]
     posts = [
-        post_to_payload(p, doc, i + 1, download_media, run_ts)
+        post_to_payload(
+            p, doc, i + 1, download_media, run_ts,
+            cli_post=cli_posts[i] if i < len(cli_posts) else None,
+        )
         for i, p in enumerate(doc.posts)
     ]
+    warnings = list(doc.warnings)
+    if not doc.thread_complete:
+        warnings.insert(0, WARNING_THREAD_INCOMPLETE)
     item = {
         "id": doc.status_id,
         "url": doc.source_url,
@@ -200,7 +233,8 @@ def document_to_item(doc, errors, download_media, output_format, run_ts):
             "avatarUrl": "",
         },
         "markdown": x2md.render_document(doc),
-        "warnings": list(doc.warnings),
+        "threadComplete": doc.thread_complete if doc.kind == "thread" else None,
+        "warnings": warnings,
         "provider": doc.provider,
         "providerErrors": [error_to_dict(e) for e in errors],
     }
