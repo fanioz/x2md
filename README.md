@@ -69,14 +69,15 @@ Pay-Per-Event event. Optional GraphQL auth via secret environment variables
 (declared in `.actor/actor.json`); without them the graphql provider reports
 itself unavailable and the chain falls back.
 
-Run locally (needs the `apify` package; the SDK currently fails to import
-in this repo's system Python — see [Known limitations](#known-limitations--not-verified)):
+Run locally (the pinned `requirements.txt` resolves a working SDK set —
+install into a fresh venv and put it first on `PATH` so `apify run` picks it up):
 
 ```console
+$ python3 -m venv .venv && . .venv/bin/activate
 $ pip install -r requirements.txt
 $ mkdir -p storage/key_value_stores/default
 $ cat > storage/key_value_stores/default/INPUT.json <<'EOF'
-{"startUrls": ["https://x.com/jack/status/20"]}
+{"startUrls": [{"url": "https://x.com/jack/status/20"}]}
 EOF
 $ apify run
 ```
@@ -340,22 +341,26 @@ This section separates what was actually measured from what was not.
   is the poster thumbnail (as specified); the mp4 is a nested secondary link.
 * **Bold/italic facets are not rendered.** `raw_text.facets` can carry `bold` ranges; they are
   left as plain text.
-* **The Apify SDK cannot be imported in this repo's system Python.**
-  `pip install apify==2.7.3` resolves, but `from apify import Actor` raises
-  `TypeError: cannot specify both default and default_factory` inside
-  `crawlee/_types.py` via the `eval-type-backport` shim — reproduced on both
-  Python 3.9 and a fresh 3.14 venv, so it is an upstream dependency conflict,
-  not a local environment issue. Consequences: `src/main.py` (the thin SDK
-  wrapper) is covered only by a stub-Actor smoke test
-  (`tests/test_actor_main.py`), never executed against the real SDK, and no
-  live `apify run` or Docker build was performed here. The Docker image
-  (`apify/actor-python:3.9` + pinned `requirements.txt`) is expected to work
-  because the image ships its own tested dependency set; verify with
-  `apify run` on a machine with a working SDK before `apify push`.
-* **No live Actor run was performed.** All Actor outputs (dataset items,
-  Markdown, KV keys, ZIP) are validated offline against recorded fixtures
-  (`tests/test_actor*.py`, `prototype/actor_sample_run.py`). Live behaviour
-  against `api.fxtwitter.com` through the Apify Proxy is unverified.
+* **Two floating transitive dependencies of the Apify SDK break on upgrade.**
+  An unpinned `pip install apify==2.7.3` resolves `pydantic>=2.12` (turns
+  crawlee 0.6.12's `Field(default=..., default_factory=...)` into a hard
+  `TypeError` at import) and `browserforge==1.2.4` (drops `DATA_FILES`, which
+  crawlee still reads). Both break `from apify import Actor` before `main()`
+  runs. `requirements.txt` pins the known-good set
+  (`pydantic==2.11.10`, `browserforge==1.2.3`, plus the full transitive tree),
+  and the Dockerfile imports the SDK at build time so this class of failure
+  fails the build instead of a paid run.
+* **Verified end to end as of 2026-09-24.** Docker build, `apify run` (real
+  CLI against the pinned SDK), and a run of the built container all exit 0 and
+  emit a dataset item; the container run fetched a live post from
+  `api.fxtwitter.com`. Still unverified: the Apify Proxy path (requires a plan
+  with proxy access) and Pay-Per-Event charging (requires the pricing to be
+  configured in the Apify Console).
+* **Live behaviour through the Apify Proxy is unverified.** All offline
+  validation uses recorded fixtures (`tests/test_actor*.py`,
+  `prototype/actor_sample_run.py`); the direct container fetch succeeded, but
+  proxied requests, residential-IP handling, and PPE charging only run on the
+  platform.
 
 ### Legal / etiquette
 

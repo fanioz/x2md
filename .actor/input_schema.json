@@ -9,7 +9,15 @@
       "description": "X/Twitter post, thread, or Article URLs (or bare numeric IDs) to scrape. One dataset item is produced per entry.",
       "editor": "requestListSources",
       "items": {
-        "type": "string"
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "URL",
+            "description": "Post/Article URL or bare numeric status ID."
+          }
+        },
+        "required": ["url"]
       },
       "default": [{ "url": "https://x.com/jack/status/20" }],
       "prefill": [{ "url": "https://x.com/jack/status/20" }]
@@ -34,20 +42,24 @@
       "title": "Download media files",
       "type": "object",
       "description": "Upload original-resolution images and mp4 video/GIF sources to the key-value store (plus an optional ZIP bundle). Off by default; URLs are always returned.",
+      "editor": "json",
       "properties": {
         "images": {
           "title": "Download images",
           "type": "boolean",
+          "description": "Upload original-resolution images to the key-value store.",
           "default": false
         },
         "videos": {
           "title": "Download videos",
           "type": "boolean",
+          "description": "Upload the best mp4 source of each video to the key-value store.",
           "default": false
         },
         "gifs": {
           "title": "Download GIFs",
           "type": "boolean",
+          "description": "Upload the mp4 source of each GIF to the key-value store.",
           "default": false
         },
         "zip": {
