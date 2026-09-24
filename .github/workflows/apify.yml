@@ -46,6 +46,10 @@ jobs:
         run: npm install -g apify-cli@1.7.1
 
       - name: Push Actor to Apify
+        # Ticket #9: push only when the APIFY_TOKEN secret is configured;
+        # without the guard, every push to main would fail for forks/CI
+        # setups that do not deploy to Apify.
+        if: ${{ secrets.APIFY_TOKEN != '' }}
         id: apify_push
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}

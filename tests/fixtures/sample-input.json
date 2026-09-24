@@ -1,0 +1,7 @@
+{
+  "startUrls": [{ "url": "https://x.com/jack/status/20" }],
+  "maxItems": 5,
+  "provider": "auto",
+  "downloadMedia": { "images": false, "videos": false, "gifs": false, "zip": false },
+  "outputFormat": "both"
+}
