@@ -3,7 +3,7 @@
   "name": "x2md-twitter-post-scraper",
   "title": "x2md Twitter Post Scraper",
   "description": "Scrape X/Twitter posts, self-threads, and Articles into structured JSON plus clean Markdown, with optional original-resolution image and mp4 downloads. No auth required.",
-  "version": "0.1.0",
+  "version": "0.1",
   "meta": {
     "generatedBy": "ZCode with muse-spark"
   },
@@ -13,23 +13,12 @@
     "dataset": "./dataset_schema.json",
     "keyValueStore": "./key_value_store_schema.json"
   },
+  "readme": "../README_ACTOR.md",
   "environmentVariables": {
-    "X2MD_GRAPHQL_QUERY_ID": {
-      "description": "TweetDetail query id for the graphql provider (optional; X rotates it on every web deploy).",
-      "secret": true
-    },
-    "X2MD_AUTH_TOKEN": {
-      "description": "auth_token cookie value for authenticated graphql (optional).",
-      "secret": true
-    },
-    "X2MD_CT0": {
-      "description": "ct0 CSRF cookie value for authenticated graphql (optional).",
-      "secret": true
-    },
-    "X2MD_BEARER_TOKEN": {
-      "description": "Bearer token override for graphql (optional; defaults to the public web constant).",
-      "secret": true
-    }
+    "X2MD_GRAPHQL_QUERY_ID": "TweetDetail query id for the graphql provider (optional; X rotates it on every web deploy). Mark as a secret in the Apify Console.",
+    "X2MD_AUTH_TOKEN": "auth_token cookie value for authenticated graphql (optional). Mark as a secret in the Apify Console.",
+    "X2MD_CT0": "ct0 CSRF cookie value for authenticated graphql (optional). Mark as a secret in the Apify Console.",
+    "X2MD_BEARER_TOKEN": "Bearer token override for graphql (optional; defaults to the public web constant). Mark as a secret in the Apify Console."
   },
   "dockerfile": "../Dockerfile"
 }
