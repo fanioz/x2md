@@ -149,6 +149,21 @@ class FetchOneTest(unittest.TestCase):
         self.assertIn("error", item)
         self.assertIn("url", item)
 
+    def test_unexpected_exception_isolated_per_url(self):
+        """A bug inside fetch_document must come back as an error item, not abort."""
+        original = x2md.fetch_document
+
+        def boom(*args, **kwargs):
+            raise RuntimeError("boom")
+
+        x2md.fetch_document = boom
+        try:
+            item = actor_lib.fetch_one("https://x.com/jack/status/20", BASE_INPUT)
+        finally:
+            x2md.fetch_document = original
+        self.assertEqual(item["url"], "https://x.com/jack/status/20")
+        self.assertIn("boom", item["error"])
+
 
 class ThreadMappingTest(unittest.TestCase):
     def test_thread_flat_and_nested(self):
@@ -175,6 +190,19 @@ class ThreadMappingTest(unittest.TestCase):
         self.assertIn("posts", item)
         self.assertNotIn("thread", item)
 
+    def test_nested_output_keeps_posts_for_non_thread(self):
+        """Nested-only output must not drop the structured payload of a post."""
+        _support.install_fake_http(routes_for("20"))
+        try:
+            item = actor_lib.fetch_one(
+                "https://x.com/jack/status/20", dict(BASE_INPUT, outputFormat="nested")
+            )
+        finally:
+            _support.restore_http()
+        self.assertEqual(item["kind"], "post")
+        self.assertTrue(item["posts"])
+        self.assertNotIn("thread", item)
+
 
 class MediaKeysTest(unittest.TestCase):
     def test_video_gets_mp4_file_key_with_timestamp(self):
@@ -188,7 +216,7 @@ class MediaKeysTest(unittest.TestCase):
         self.assertEqual(len(media), 1)
         self.assertEqual(media[0]["type"], "video")
         key = media[0]["fileKey"]
-        self.assertTrue(key.startswith("video/imagine_2095249317875622255_"))
+        self.assertTrue(key.startswith("video_imagine_2095249317875622255_"))
         self.assertTrue(key.endswith(".mp4"))
         self.assertLessEqual(len(key), 256)
 
@@ -205,9 +233,18 @@ class MediaKeysTest(unittest.TestCase):
     def test_kv_key_helpers(self):
         """Media key helpers choose the expected prefixes and extensions."""
         key = actor_lib.media_file_key("image", "jack", "20", 0, 1758230400000)
-        self.assertEqual(key, "image/jack_20_1758230400000_p0.jpg")
+        self.assertEqual(key, "image_jack_20_1758230400000_p0.jpg")
         video_key = actor_lib.media_file_key("video", "jack", "20", 0, 1758230400000)
         self.assertTrue(video_key.endswith(".mp4"))
+
+    def test_iter_file_refs_thread_fallback_without_duplicates(self):
+        """Nested-only threads expose refs via "thread"; "both" output yields once."""
+        nested_only = {"thread": {"posts": [{"media": [{"fileKey": "image_jack_20_1_p0.jpg"}]}]}}
+        refs = list(actor_lib.iter_file_refs(nested_only))
+        self.assertEqual([ref["fileKey"] for ref in refs], ["image_jack_20_1_p0.jpg"])
+        post = {"media": [{"fileKey": "image_jack_20_1_p0.jpg"}]}
+        both = {"posts": [post], "thread": {"posts": [post]}}
+        self.assertEqual(len(list(actor_lib.iter_file_refs(both))), 1)
 
 
 class MediaDownloadPlanTest(unittest.TestCase):
@@ -274,7 +311,7 @@ class RunBatchTest(unittest.TestCase):
             result = actor_lib.run_batch(actor_lib.validate_input(single_video))
         finally:
             _support.restore_http()
-        self.assertTrue(any(k.startswith("zip/run_") for k in result["kv_keys"]))
+        self.assertTrue(any(k.startswith("zip_run_") for k in result["kv_keys"]))
 
 
 class ThreadCompletenessTest(unittest.TestCase):
@@ -334,8 +371,11 @@ class ThreadCompletenessTest(unittest.TestCase):
             tracemalloc.start()
             item = actor_lib.fetch_one(url, BASE_INPUT)
             current, peak = tracemalloc.get_traced_memory()
-            tracemalloc.stop()
         finally:
+            # Guarded: a failure before start() must not raise here either,
+            # and a fetch_one failure must not leak tracing into the suite.
+            if tracemalloc.is_tracing():
+                tracemalloc.stop()
             _support.restore_http()
         self.assertEqual(item["kind"], "thread")
         self.assertEqual(len(item["posts"]), 100)

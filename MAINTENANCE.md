@@ -32,22 +32,25 @@ same PR.
 Watch these indicators after each `apify push`:
 
 - Average run memory stays below 128 MB.
-- Dataset item charge events match the number of input URLs processed.
+- Dataset item charge events match the number of successfully scraped URLs (invalid URLs and all-provider failures are pushed as error rows without a charge).
 - `providerErrors` rate is low; spikes indicate a provider outage or IP block.
 - `thread_incomplete` warnings spike when FxTwitter thread endpoints degrade.
 
 ## Monthly health checks
 
-Once a month, run a small fixture input against the Actor to confirm FxTwitter is
-still returning threads correctly:
+Once a month, run a small fixture input against the Actor to confirm FxTwitter
+is still returning threads correctly. The fixture contains two URLs: a single
+post (basic smoke) and a known public 5-post self-thread (`XCreators` status
+`2072439205213421694`), which is what exercises FxTwitter's multi-post thread
+enumeration:
 
 ```bash
 apify run -p --input-file tests/fixtures/sample-input.json
 ```
 
-If the run returns `thread_incomplete` for a known public thread that previously
-resolved fully, FxTwitter's thread endpoint may have changed and the GraphQL
-fallback or provider order may need review.
+If the run returns `thread_incomplete` for that known public thread that
+previously resolved fully, FxTwitter's thread endpoint may have changed and the
+GraphQL fallback or provider order may need review.
 
 ## Common issues
 

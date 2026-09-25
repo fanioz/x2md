@@ -8,6 +8,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
@@ -17,7 +20,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.9"
+          python-version: "3.11"
 
       - name: Install Python dependencies
         run: |
@@ -34,8 +37,11 @@ jobs:
           cd tests
           python -m unittest discover -s . -t .
 
-      - name: Build Actor image
-        run: docker build --no-cache --tag x2md-actor-test . 2>&1 | tee docker-build.log
+      # These two modules are skipped by the network guard above and exercise src/main.py end to end.
+      - name: Run Actor entry-point tests (real SDK)
+        run: |
+          cd tests
+          python -m unittest -v test_actor_sdk test_actor_main
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -45,14 +51,30 @@ jobs:
       - name: Install Apify CLI
         run: npm install -g apify-cli@1.7.1
 
+      - name: Check APIFY_TOKEN availability
+        id: token_check
+        env:
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        run: |
+          if [ -n "$APIFY_TOKEN" ]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::APIFY_TOKEN is not set; skipping Apify push."
+          fi
+
       - name: Push Actor to Apify
         # Ticket #9: push only when the APIFY_TOKEN secret is configured;
         # without the guard, every push to main would fail for forks/CI
-        # setups that do not deploy to Apify.
-        if: ${{ secrets.APIFY_TOKEN != '' }}
+        # setups that do not deploy to Apify. The secrets context is not
+        # allowed in step-level `if`, so availability is probed via an env
+        # var first; explicit bash enables pipefail so a failed `apify push`
+        # fails the step even though it is piped through tee.
+        if: steps.token_check.outputs.has_token == 'true'
         id: apify_push
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+        shell: bash
         run: |
           apify push 2>&1 | tee apify-push.log
 
@@ -62,5 +84,4 @@ jobs:
         with:
           name: apify-build-and-push-logs
           path: |
-            docker-build.log
             apify-push.log

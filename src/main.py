@@ -8,8 +8,9 @@ read-only), pushes one dataset item per URL via ``Actor.push_data`` with a
 bundle to the key-value store via ``Actor.set_value``.
 
 Proxy: every HTTP request (provider JSON + media bytes) goes through the
-Apify Proxy URL from ``Actor.create_proxy_configuration`` when one is
-available; without platform proxy env vars the run proceeds direct and logs
+Apify Proxy URL from ``Actor.create_proxy_configuration`` (fed the user's
+``proxyConfiguration`` input) when one is available; without platform
+proxy env vars the run proceeds direct and logs
 a warning. ``x2md.HttpClient`` has no proxy knob, so this module installs
 a process-global ``urllib`` opener carrying a ``ProxyHandler`` — the only
 code path that performs HTTP in this process is urllib, so nothing else is
@@ -21,10 +22,11 @@ Logging: all operational logging goes through ``Actor.log`` (which censors
 """
 
 import asyncio
-import io
 import os
+import pathlib
 import re
 import sys
+import tempfile
 import time
 import urllib.request
 import zipfile
@@ -38,7 +40,10 @@ import x2md
 
 CHARGE_EVENT_DATASET_ITEM = "dataset-item"
 
-_CENSORED_PATTERNS = ("auth_token", "ct0", "bearer_token", "X2MD_")
+# Each entry must be a real env-var/cookie name: the redaction regex demands a
+# separator right after the pattern, so a bare "X2MD_" prefix would never match
+# (and X2MD_GRAPHQL_QUERY_ID=... would leak its value into logs).
+_CENSORED_PATTERNS = ("auth_token", "ct0", "bearer_token", "X2MD_GRAPHQL_QUERY_ID")
 
 
 def _redact(text):
@@ -52,10 +57,14 @@ def _redact(text):
     return text
 
 
-async def _proxy_url():
+async def _proxy_url(raw_input):
     """Return an Apify Proxy URL string, or None when unavailable."""
     try:
-        config = await Actor.create_proxy_configuration()
+        # Keyword-only on the SDK side: without actor_proxy_input the user's
+        # proxyConfiguration input field would be silently ignored.
+        config = await Actor.create_proxy_configuration(
+            actor_proxy_input=raw_input.get("proxyConfiguration")
+        )
     except Exception as exc:
         Actor.log.warning("Proxy unavailable, continuing without proxy: %s", _redact(exc))
         return None
@@ -82,7 +91,15 @@ def _download_bytes(url, timeout=30):
     """Fetch a media asset using the process's configured urllib opener."""
     request = urllib.request.Request(url, headers={"User-Agent": "x2md-actor/%s" % x2md.__version__})
     with urllib.request.urlopen(request, timeout=timeout) as resp:
-        return resp.read()
+        return resp.read(), resp.headers.get("Content-Type")
+
+
+def _record_content_type(resp_type, key):
+    """Prefer the response Content-Type; fall back to the extension default."""
+    content_type = (resp_type or "").split(";", 1)[0].strip()
+    if not content_type:
+        content_type = "video/mp4" if key.endswith(".mp4") else "image/jpeg"
+    return content_type
 
 
 async def _upload_media(plan, doc_id):
@@ -90,7 +107,7 @@ async def _upload_media(plan, doc_id):
     uploaded = []
     for entry in plan:
         try:
-            data = await asyncio.to_thread(_download_bytes, entry["download_url"])
+            data, resp_type = await asyncio.to_thread(_download_bytes, entry["download_url"])
         except Exception as exc:
             Actor.log.warning(
                 "Media download failed for %s (item %s): %s",
@@ -99,25 +116,29 @@ async def _upload_media(plan, doc_id):
                 _redact(exc),
             )
             continue
-        content_type = "video/mp4" if entry["key"].endswith(".mp4") else "image/jpeg"
-        await Actor.set_value(entry["key"], data, content_type=content_type)
+        await Actor.set_value(
+            entry["key"], data, content_type=_record_content_type(resp_type, entry["key"])
+        )
         uploaded.append(entry["key"])
     return uploaded
 
 
 async def _upload_zip(keys, run_ts):
     """Bundle already-uploaded media into a ZIP in the key-value store."""
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        for key in keys:
-            record = await Actor.get_value(key)
-            if record is None:
-                Actor.log.warning("Skipping missing media file in ZIP: %s", _redact(key))
-                continue
-            data = record if isinstance(record, (bytes, bytearray)) else bytes(record)
-            archive.writestr(key.split("/", 1)[1], data)
-    zip_key = "zip/run_%d.zip" % run_ts
-    await Actor.set_value(zip_key, buffer.getvalue(), content_type="application/zip")
+    zip_key = "zip_run_%d.zip" % run_ts
+    # Build on disk: buffering the whole archive in a BytesIO (and copying it
+    # again in getvalue) would double the peak RAM of the largest media set.
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        zip_path = pathlib.Path(tmp_dir) / zip_key
+        with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as archive:
+            for key in keys:
+                record = await Actor.get_value(key)
+                if record is None:
+                    Actor.log.warning("Skipping missing media file in ZIP: %s", _redact(key))
+                    continue
+                data = record if isinstance(record, (bytes, bytearray)) else bytes(record)
+                archive.writestr(key.split("_", 1)[1], data)
+        await Actor.set_value(zip_key, zip_path.read_bytes(), content_type="application/zip")
     return zip_key
 
 
@@ -135,7 +156,7 @@ async def main():
         # reads X2MD_GRAPHQL_QUERY_ID / X2MD_AUTH_TOKEN / X2MD_CT0 /
         # X2MD_BEARER_TOKEN from the environment. Set them as secret
         # environment variables in the Apify Console; never in input.
-        proxy_url = await _proxy_url()
+        proxy_url = await _proxy_url(raw_input)
         if proxy_url:
             _install_proxy_opener(proxy_url)
             Actor.log.info("Using Apify Proxy for all HTTP requests.")

@@ -70,7 +70,7 @@ class FakeActor:
         record = self.stored.get(key)
         return record[0] if record else None
 
-    async def create_proxy_configuration(self):
+    async def create_proxy_configuration(self, actor_proxy_input=None):
         """Simulate an Actor run without a configured proxy."""
         return None
 
@@ -106,6 +106,8 @@ class MainSmokeTest(unittest.TestCase):
                 "https://api.fxtwitter.com/2/status/20": "fxtwitter_v2_status_simple.json",
                 "https://api.fxtwitter.com/2/thread/2095249317875622255": "fxtwitter_v2_video.json",
                 "https://api.fxtwitter.com/2/status/2095249317875622255": "fxtwitter_v2_video.json",
+                "https://api.fxtwitter.com/2/thread/2088006016721940988": "fxtwitter_v2_photos.json",
+                "https://api.fxtwitter.com/2/status/2088006016721940988": "fxtwitter_v2_photos.json",
             }
         )
         main = load_main_with_stub()
@@ -115,6 +117,7 @@ class MainSmokeTest(unittest.TestCase):
             "startUrls": [
                 "https://x.com/jack/status/20",
                 "https://x.com/imagine/status/2095249317875622255",
+                "https://x.com/XCreators/status/2088006016721940988",
             ],
             "maxItems": 10,
             "provider": "auto",
@@ -122,7 +125,7 @@ class MainSmokeTest(unittest.TestCase):
             "outputFormat": "both",
         }
         orig_download = main._download_bytes
-        main._download_bytes = lambda url, timeout=30: b"FAKE-" + url.encode()[:20]
+        main._download_bytes = lambda url, timeout=30: (b"FAKE-" + url.encode()[:20], "image/png")
         try:
             asyncio.run(main.main())
         finally:
@@ -130,19 +133,23 @@ class MainSmokeTest(unittest.TestCase):
             _support.restore_http()
 
         try:
-            self.assertEqual(len(actor.pushed), 2)
+            self.assertEqual(len(actor.pushed), 3)
             items = [data for data, _event in actor.pushed]
             self.assertEqual(items[0]["id"], "20")
             self.assertEqual(items[1]["kind"], "post")
             # dataset-item charge event passed through
             self.assertEqual(actor.pushed[0][1], "dataset-item")
-            # video bytes uploaded + ZIP bundle created
-            video_keys = [k for k in actor.stored if k.startswith("video/")]
+            # video + image bytes uploaded + ZIP bundle created
+            video_keys = [k for k in actor.stored if k.startswith("video_")]
             self.assertEqual(len(video_keys), 1)
-            zip_keys = [k for k in actor.stored if k.startswith("zip/")]
+            image_keys = [k for k in actor.stored if k.startswith("image_")]
+            self.assertEqual(len(image_keys), 1)
+            # The response Content-Type is stored verbatim, proving passthrough.
+            self.assertEqual(actor.stored[image_keys[0]][1], "image/png")
+            zip_keys = [k for k in actor.stored if k.startswith("zip_")]
             self.assertEqual(len(zip_keys), 1)
             archive = zipfile.ZipFile(io.BytesIO(actor.stored[zip_keys[0]][0]))
-            self.assertEqual(len(archive.namelist()), 1)
+            self.assertEqual(len(archive.namelist()), 2)
         finally:
             sys.modules.pop("apify", None)
             sys.modules.pop("main", None)

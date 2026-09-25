@@ -15,7 +15,9 @@ Decisions (from wayfinder tickets #4/#5/#6):
   ``quote``, and ``article`` verbatim from :func:`x2md.document_to_json`, so
   the Actor and ``x2md --json`` cannot disagree. Total failure yields a
   ``failedProviders`` chain instead.
-- media keys: ``<prefix>/<handle>_<postid>_<timestamp>_p<index>.<ext>``.
+- media keys: ``<prefix>_<handle>_<postid>_<timestamp>_p<index>.<ext>``.
+  The Apify key-value store only accepts ``a-zA-Z0-9!-_. '()``, so ``/``
+  is not a legal separator.
 """
 
 import os
@@ -120,7 +122,8 @@ def media_file_key(kind, handle, post_id, index, run_ts):
     """Build a stable media key within the image or video prefix."""
     ext = "mp4" if kind in ("video", "gif") else "jpg"
     prefix = "video" if kind in ("video", "gif") else "image"
-    return "%s/%s_%s_%d_p%d.%s" % (prefix, safe_handle(handle), post_id, run_ts, index, ext)
+    # "/" would be rejected by the key-value store, hence the "_" separator.
+    return "%s_%s_%s_%d_p%d.%s" % (prefix, safe_handle(handle), post_id, run_ts, index, ext)
 
 
 def best_media_asset(item):
@@ -243,7 +246,9 @@ def document_to_item(doc, errors, download_media, output_format, run_ts):
         "provider": doc.provider,
         "providerErrors": [error_to_dict(e) for e in errors],
     }
-    if output_format in ("flat", "both"):
+    # Nested output only carries a "thread" block for threads; without this
+    # branch posts and articles would lose their structured payload entirely.
+    if output_format in ("flat", "both") or doc.kind != "thread":
         item["posts"] = posts
     if output_format in ("nested", "both") and doc.kind == "thread":
         item["thread"] = {"posts": posts, "complete": doc.thread_complete}
@@ -260,8 +265,18 @@ def failure_item(url, status_id, errors):
 
 
 def iter_file_refs(item):
-    """Yield media refs carrying a fileKey from a dataset item."""
-    for post in item.get("posts", []):
+    """Yield media refs carrying a fileKey from a dataset item.
+
+    Nested-only thread items keep their posts under ``thread``; prefer
+    ``posts`` whenever it is present so "both" output (where the same dicts
+    appear in both places) never yields a ref twice.
+    """
+    posts = item.get("posts")
+    if not posts:
+        thread = item.get("thread")
+        if isinstance(thread, dict):
+            posts = thread.get("posts")
+    for post in posts or []:
         for media in post.get("media", []):
             if media.get("fileKey"):
                 yield media
@@ -270,21 +285,27 @@ def iter_file_refs(item):
 def fetch_one(url, cleaned_input, run_ts=None, client=None):
     """Process a single URL/ID into a dataset item (or failure item)."""
     run_ts = run_ts if run_ts is not None else int(time.time() * 1000)
+    # Isolation boundary: one bad URL must never abort the whole batch, so
+    # an unexpected parser/serializer error is downgraded to a per-item
+    # error alongside the invalid-URL and all-providers-failed cases.
     try:
-        target = x2md.parse_target(url)
-    except x2md.InputError as exc:
-        return {"url": url, "error": str(exc)}
-    own_client = client if client is not None else x2md.HttpClient(
-        timeout=20, max_retries=2, user_agent="x2md-actor/%s" % x2md.__version__
-    )
-    providers = x2md.build_providers(cleaned_input["provider"], own_client, {})
-    try:
-        doc, errors = x2md.fetch_document(target, providers, own_client)
-    except x2md.NoProviderAvailable as exc:
-        return failure_item(url, target.status_id, exc.errors)
-    return document_to_item(
-        doc, errors, cleaned_input["downloadMedia"], cleaned_input["outputFormat"], run_ts
-    )
+        try:
+            target = x2md.parse_target(url)
+        except x2md.InputError as exc:
+            return {"url": url, "error": str(exc)}
+        own_client = client if client is not None else x2md.HttpClient(
+            timeout=20, max_retries=2, user_agent="x2md-actor/%s" % x2md.__version__
+        )
+        providers = x2md.build_providers(cleaned_input["provider"], own_client, {})
+        try:
+            doc, errors = x2md.fetch_document(target, providers, own_client)
+        except x2md.NoProviderAvailable as exc:
+            return failure_item(url, target.status_id, exc.errors)
+        return document_to_item(
+            doc, errors, cleaned_input["downloadMedia"], cleaned_input["outputFormat"], run_ts
+        )
+    except Exception as exc:
+        return {"url": url, "error": "unexpected error: %s" % exc}
 
 
 def run_batch(cleaned_input, run_ts=None, client=None):
@@ -297,5 +318,5 @@ def run_batch(cleaned_input, run_ts=None, client=None):
         items.append(item)
         kv_keys.extend(ref["fileKey"] for ref in iter_file_refs(item))
     if cleaned_input["downloadMedia"].get("zip") and kv_keys:
-        kv_keys.append("zip/run_%d.zip" % run_ts)
+        kv_keys.append("zip_run_%d.zip" % run_ts)
     return {"items": items, "kv_keys": kv_keys}

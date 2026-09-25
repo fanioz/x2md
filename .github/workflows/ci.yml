@@ -35,6 +35,12 @@ jobs:
           cd tests
           python -m unittest discover -s . -t .
 
+      # These two modules are skipped by the network guard above and exercise src/main.py end to end.
+      - name: Run Actor entry-point tests (real SDK)
+        run: |
+          cd tests
+          python -m unittest -v test_actor_sdk test_actor_main
+
   docker:
     runs-on: ubuntu-latest
     steps:

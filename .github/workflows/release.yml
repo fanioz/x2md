@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Read VERSION
         id: version
@@ -36,8 +38,8 @@ jobs:
         if: steps.check_tag.outputs.exists == 'false'
         id: changelog
         run: |
-          VERSION=${{ steps.version.outputs.version }}
-          SECTION=$(awk "/^## \\[${VERSION//./\\.}\\] - /{flag=1; next} /^## \\[/{flag=0} flag" CHANGELOG.md)
+          SECTION=$(awk "/^## \\[${VERSION//./\\.}\\] - /{flag=1; next} /^## \\[/{flag=0} /^\\[.*\\]: /{flag=0} flag" CHANGELOG.md)
+          if [ -z "$SECTION" ]; then echo "::error::No CHANGELOG.md section found for version $VERSION"; exit 1; fi
           echo "section<<EOF" >> "$GITHUB_OUTPUT"
           echo "$SECTION" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
@@ -46,6 +48,7 @@ jobs:
         if: steps.check_tag.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
+          target_commitish: ${{ github.sha }}
           tag_name: v${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
           body: ${{ steps.changelog.outputs.section }}

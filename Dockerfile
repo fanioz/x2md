@@ -3,7 +3,9 @@
 # The scraping core (x2md.py) is stdlib-only; the Apify SDK is the single
 # direct dependency and requirements.txt pins it together with its full
 # transitive tree, so a rebuilt image resolves the same packages every time.
-FROM apify/actor-python:3.9
+# Base image pinned by digest: Python 3.9 is EOL (since 2025-10-31) and the
+# CI matrix already tests 3.11.
+FROM apify/actor-python:3.11@sha256:81b79a0d1a4894648cd23bc4300928d4e1346c4f7fc5b327d292e70090d2561b
 
 COPY requirements.txt ./
 RUN echo "Python version:" \

@@ -14,6 +14,7 @@ Turn X/Twitter posts, self-threads, and X Articles into structured dataset items
 
 - **Pay-Per-Event**: `$0.001` per dataset item.
 - **Free tier**: `100 dataset items / month`.
+- Invalid URLs and total provider failures are reported as error rows in the dataset free of charge — only successful dataset items trigger the charge.
 - Media downloads and ZIP bundling use your Apify key-value store; storage is billed separately by Apify.
 
 ## Input
@@ -23,8 +24,8 @@ Example input:
 ```json
 {
   "startUrls": [
-    "https://x.com/jack/status/20",
-    "https://x.com/elonmusk/status/1770012345678900000"
+    { "url": "https://x.com/jack/status/20" },
+    { "url": "https://x.com/elonmusk/status/1770012345678900000" }
   ],
   "maxItems": 10,
   "provider": "auto",
@@ -41,7 +42,7 @@ Example input:
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
 | `startUrls` | yes | — | Array of post/Article URLs or bare numeric IDs. |
-| `maxItems` | no | 10 | URLs to process per run, clamped to 50. |
+| `maxItems` | no | 10 | URLs to process per run; maximum 50, higher values are rejected. |
 | `provider` | no | `"auto"` | `"auto"`, `"fxtwitter"`, `"vxtwitter"`, `"syndication"`, or `"graphql"`. |
 | `downloadMedia` | no | all `false` | Toggle images/videos/gifs and the optional ZIP bundle. |
 | `outputFormat` | no | `"both"` | `"flat"`, `"nested"`, or `"both"` (threads only). |
@@ -74,6 +75,18 @@ Post objects include:
 - `media`: array with `type`, `url`, `fileKey` (when downloaded), `altText`
 - `threadPosition`, `threadComplete`, `conversationId` (threads)
 
+Error rows are different. A URL that fails validation produces:
+
+```json
+{ "url": "https://x.com/not-a-post", "error": "..." }
+```
+
+A URL where every provider failed produces:
+
+```json
+{ "id": "20", "url": "https://x.com/jack/status/20", "failedProviders": [ { "provider": "fxtwitter", "message": "...", "url": "...", "status": 503 } ] }
+```
+
 ## Optional GraphQL provider
 
 If FxTwitter and VxTwitter are rate-limited or missing data, you can enable the GraphQL fallback by setting these environment variables in the Apify Console:
@@ -83,7 +96,7 @@ If FxTwitter and VxTwitter are rate-limited or missing data, you can enable the 
 - `X2MD_CT0`
 - `X2MD_BEARER_TOKEN`
 
-These are declared as secrets in the Actor and are never logged.
+Set them as secret environment variables in the Apify Console (never in the run input); the Actor censors their values from its logs.
 
 ## Proxy
 

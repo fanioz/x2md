@@ -23,6 +23,7 @@ Run from the repository root::
 
 import json
 import pathlib
+import time
 
 HERE = pathlib.Path(__file__).resolve().parent
 
@@ -60,6 +61,15 @@ PARAGRAPH = (
 )
 
 
+def created_at_for(index):
+    """Twitter-style date string derived from the same epoch as created_timestamp.
+
+    x2md prefers ``created_at`` over ``created_timestamp``, so both fields must
+    describe the same instant or every post would parse to post 0's time.
+    """
+    return time.strftime("%a %b %d %H:%M:%S +0000 %Y", time.gmtime(BASE_TS + index * 60))
+
+
 def make_post(index, total, replying_to_self):
     """Create one synthetic FxTwitter post with optional self-reply metadata."""
     post_id = str(BASE_ID + index)
@@ -74,7 +84,7 @@ def make_post(index, total, replying_to_self):
         "likes": max(0, 900 - index * 7),
         "bookmarks": max(0, 60 - index),
         "quotes": max(0, 12 - index // 4),
-        "created_at": "Wed Jul 01 21:56:25 +0000 2026",
+        "created_at": created_at_for(index),
         "created_timestamp": BASE_TS + index * 60,
         "possibly_sensitive": False,
         "views": max(0, 300000 - index * 1500),

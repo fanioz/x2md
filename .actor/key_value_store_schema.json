@@ -5,19 +5,19 @@
     "images": {
       "title": "Images",
       "description": "Original-resolution images downloaded from posts and threads.",
-      "keyPrefix": "image/",
-      "contentTypes": ["image/jpeg"]
+      "keyPrefix": "image_",
+      "contentTypes": ["image/jpeg", "image/png", "image/webp", "image/gif"]
     },
     "videos": {
       "title": "Videos",
       "description": "Best mp4 source for videos and GIFs.",
-      "keyPrefix": "video/",
+      "keyPrefix": "video_",
       "contentTypes": ["video/mp4"]
     },
     "bundles": {
       "title": "Media bundles",
       "description": "ZIP archive of all media downloaded during the run.",
-      "keyPrefix": "zip/",
+      "keyPrefix": "zip_",
       "contentTypes": ["application/zip"]
     }
   }

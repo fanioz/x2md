@@ -42,7 +42,7 @@
       "title": "Download media files",
       "type": "object",
       "description": "Upload original-resolution images and mp4 video/GIF sources to the key-value store (plus an optional ZIP bundle). Off by default; URLs are always returned.",
-      "editor": "json",
+      "editor": "schemaBased",
       "properties": {
         "images": {
           "title": "Download images",

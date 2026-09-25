@@ -64,13 +64,28 @@ class ActorSdkRunTest(unittest.TestCase):
         env["X2MD_ACTOR_SDK_ROUTES"] = json.dumps(routes)
         env["PYTHONPATH"] = str(REPO) + os.pathsep + str(shim_dir)
 
-        proc = subprocess.run(
-            [sys.executable, "-m", "src"],
-            cwd=str(REPO),
-            env=env,
-            capture_output=True,
-            text=True,
-        )
+        # A hung Actor run would stall the whole suite; 120s is generous for
+        # a single-URL stubbed run.
+        try:
+            proc = subprocess.run(
+                [sys.executable, "-m", "src"],
+                cwd=str(REPO),
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+        except subprocess.TimeoutExpired as exc:
+            # Partial output may be bytes and either stream may be missing.
+            stdout = exc.stdout or ""
+            stderr = exc.stderr or ""
+            if isinstance(stdout, bytes):
+                stdout = stdout.decode("utf-8", "replace")
+            if isinstance(stderr, bytes):
+                stderr = stderr.decode("utf-8", "replace")
+            self.fail(
+                "Actor run timed out after 120s\nstdout:\n%s\nstderr:\n%s" % (stdout, stderr)
+            )
 
         if proc.returncode != 0:
             self.fail(
