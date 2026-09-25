@@ -163,17 +163,50 @@ class MainSmokeTest(unittest.TestCase):
         try:
             # Real media types pass through; header parameters are stripped.
             self.assertEqual(
-                main._record_content_type("image/png; charset=binary", "image_jack_20_1_p0.jpg"),
+                main._record_content_type("image/png; charset=binary", "image"),
                 "image/png",
             )
-            # Absent header falls back to the extension default.
-            self.assertEqual(main._record_content_type(None, "image_jack_20_1_p0.jpg"), "image/jpeg")
-            self.assertEqual(main._record_content_type(None, "video_jack_20_1_p0.mp4"), "video/mp4")
-            # Non-media responses (error pages) are rejected for both collections.
-            self.assertIsNone(main._record_content_type("text/html", "image_jack_20_1_p0.jpg"))
-            self.assertIsNone(main._record_content_type("application/json", "video_jack_20_1_p0.mp4"))
-            # An image type on a video key (the offline stub's default) is rejected too.
-            self.assertIsNone(main._record_content_type("image/png", "video_jack_20_1_p0.mp4"))
+            # Absent header falls back to the kind's extension default.
+            self.assertEqual(main._record_content_type(None, "image"), "image/jpeg")
+            self.assertEqual(main._record_content_type(None, "video"), "video/mp4")
+            # Non-media responses (error pages) are rejected for every kind.
+            self.assertIsNone(main._record_content_type("text/html", "image"))
+            self.assertIsNone(main._record_content_type("application/json", "video"))
+            # An image type on a video kind (the offline stub's default) is rejected too.
+            self.assertIsNone(main._record_content_type("image/png", "video"))
+            # GIF assets accept their mp4 re-encode and the original static
+            # image (providers do not always carry an mp4 variant).
+            self.assertEqual(main._record_content_type("image/gif", "gif"), "image/gif")
+            self.assertEqual(main._record_content_type("video/mp4", "gif"), "video/mp4")
+            self.assertIsNone(main._record_content_type("text/html", "gif"))
+        finally:
+            sys.modules.pop("apify", None)
+            sys.modules.pop("main", None)
+
+    def test_plan_from_item_carries_media_kind(self):
+        main = load_main_with_stub()
+        try:
+            item = {
+                "posts": [
+                    {
+                        "media": [
+                            {
+                                "type": "gif",
+                                "url": "https://pbs.twimg.com/media/x.gif?name=orig",
+                                "fileKey": "video_jack_20_1_p0.mp4",
+                            },
+                            {
+                                "type": "image",
+                                "url": "https://pbs.twimg.com/media/y.jpg?name=orig",
+                                "fileKey": "image_jack_20_1_p1.jpg",
+                            },
+                        ]
+                    }
+                ]
+            }
+            plan = main._plan_from_item(item)
+            self.assertEqual([entry["kind"] for entry in plan], ["gif", "image"])
+            self.assertEqual([entry["key"] for entry in plan], ["video_jack_20_1_p0.mp4", "image_jack_20_1_p1.jpg"])
         finally:
             sys.modules.pop("apify", None)
             sys.modules.pop("main", None)

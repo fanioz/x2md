@@ -101,17 +101,24 @@ _IMAGE_CONTENT_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
 _VIDEO_CONTENT_TYPES = ("video/mp4",)
 
 
-def _record_content_type(resp_type, key):
+def _record_content_type(resp_type, kind):
     """KV record content type for a downloaded asset, or None if not media.
 
     Prefers the response Content-Type; an absent header falls back to the
-    extension default, which matches the collection by construction. A type
-    outside the collection's allow-list is rejected rather than stored.
+    asset kind's default, which matches the collection by construction. A
+    type outside the kind's allow-list is rejected rather than stored. GIF
+    assets accept both their mp4 re-encode and the original static image,
+    because providers do not always carry an mp4 variant.
     """
     content_type = (resp_type or "").split(";", 1)[0].strip()
     if not content_type:
-        return "video/mp4" if key.endswith(".mp4") else "image/jpeg"
-    allowed = _VIDEO_CONTENT_TYPES if key.endswith(".mp4") else _IMAGE_CONTENT_TYPES
+        return "video/mp4" if kind in ("video", "gif") else "image/jpeg"
+    if kind == "video":
+        allowed = _VIDEO_CONTENT_TYPES
+    elif kind == "gif":
+        allowed = _VIDEO_CONTENT_TYPES + ("image/gif",)
+    else:
+        allowed = _IMAGE_CONTENT_TYPES
     return content_type if content_type in allowed else None
 
 
@@ -134,7 +141,7 @@ async def _upload_media(plan, doc_id):
                 _redact(exc),
             )
             continue
-        content_type = _record_content_type(resp_type, entry["key"])
+        content_type = _record_content_type(resp_type, entry["kind"])
         if content_type is None:
             Actor.log.warning(
                 "Media URL for %s (item %s) served Content-Type %r instead of the expected media; skipping upload.",
@@ -240,7 +247,13 @@ async def main():
 def _plan_from_item(item):
     """Rebuild download entries for media refs that carry a fileKey."""
     return [
-        {"key": ref["fileKey"], "download_url": ref["url"]}
+        {
+            "key": ref["fileKey"],
+            "download_url": ref["url"],
+            # The media kind drives the content-type allow-list; refs always
+            # carry "type", but fall back to the key's collection just in case.
+            "kind": ref.get("type") or ("video" if ref["fileKey"].endswith(".mp4") else "image"),
+        }
         for ref in actor_lib.iter_file_refs(item)
         if ref.get("url")
     ]

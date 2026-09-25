@@ -23,3 +23,7 @@ CHANGELOG.md
 # Credentials
 .x2md_auth.json
 *.auth.json
+
+# CI workflow logs (apify.yml tee-s these into the repo root)
+docker-build.log
+apify-push.log

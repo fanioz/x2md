@@ -22,3 +22,7 @@ node_modules/
 # Editor / session artifacts
 .zcode/
 .vercel
+
+# CI workflow logs (apify.yml tee-s these into the repo root)
+docker-build.log
+apify-push.log

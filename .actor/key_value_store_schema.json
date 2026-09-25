@@ -12,7 +12,7 @@
       "title": "Videos",
       "description": "Best mp4 source for videos and GIFs.",
       "keyPrefix": "video_",
-      "contentTypes": ["video/mp4"]
+      "contentTypes": ["video/mp4", "image/gif"]
     },
     "bundles": {
       "title": "Media bundles",
