@@ -125,7 +125,10 @@ class MainSmokeTest(unittest.TestCase):
             "outputFormat": "both",
         }
         orig_download = main._download_bytes
-        main._download_bytes = lambda url, timeout=30: (b"FAKE-" + url.encode()[:20], "image/png")
+        main._download_bytes = lambda url, timeout=30: (
+            b"FAKE-" + url.encode()[:20],
+            "video/mp4" if ".mp4" in url else "image/png",
+        )
         try:
             asyncio.run(main.main())
         finally:
@@ -146,10 +149,31 @@ class MainSmokeTest(unittest.TestCase):
             self.assertEqual(len(image_keys), 1)
             # The response Content-Type is stored verbatim, proving passthrough.
             self.assertEqual(actor.stored[image_keys[0]][1], "image/png")
+            self.assertEqual(actor.stored[video_keys[0]][1], "video/mp4")
             zip_keys = [k for k in actor.stored if k.startswith("zip_")]
             self.assertEqual(len(zip_keys), 1)
             archive = zipfile.ZipFile(io.BytesIO(actor.stored[zip_keys[0]][0]))
             self.assertEqual(len(archive.namelist()), 2)
+        finally:
+            sys.modules.pop("apify", None)
+            sys.modules.pop("main", None)
+
+    def test_record_content_type_validates_media_type(self):
+        main = load_main_with_stub()
+        try:
+            # Real media types pass through; header parameters are stripped.
+            self.assertEqual(
+                main._record_content_type("image/png; charset=binary", "image_jack_20_1_p0.jpg"),
+                "image/png",
+            )
+            # Absent header falls back to the extension default.
+            self.assertEqual(main._record_content_type(None, "image_jack_20_1_p0.jpg"), "image/jpeg")
+            self.assertEqual(main._record_content_type(None, "video_jack_20_1_p0.mp4"), "video/mp4")
+            # Non-media responses (error pages) are rejected for both collections.
+            self.assertIsNone(main._record_content_type("text/html", "image_jack_20_1_p0.jpg"))
+            self.assertIsNone(main._record_content_type("application/json", "video_jack_20_1_p0.mp4"))
+            # An image type on a video key (the offline stub's default) is rejected too.
+            self.assertIsNone(main._record_content_type("image/png", "video_jack_20_1_p0.mp4"))
         finally:
             sys.modules.pop("apify", None)
             sys.modules.pop("main", None)

@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+# Neither job needs write access; keep the default read/write token scoped down.
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest

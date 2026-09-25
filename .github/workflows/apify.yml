@@ -43,6 +43,13 @@ jobs:
           cd tests
           python -m unittest -v test_actor_sdk test_actor_main
 
+      # The deploy workflow does not wait on ci.yml, so the image build is
+      # re-run here as a hard gate: a Dockerfile that fails to build must
+      # stop the deploy before the Actor reaches the Apify Store.
+      - name: Build Actor image (deploy gate)
+        shell: bash
+        run: docker build --no-cache --tag x2md-actor-test . 2>&1 | tee docker-build.log
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
@@ -84,4 +91,5 @@ jobs:
         with:
           name: apify-build-and-push-logs
           path: |
+            docker-build.log
             apify-push.log

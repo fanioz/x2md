@@ -94,16 +94,34 @@ def _download_bytes(url, timeout=30):
         return resp.read(), resp.headers.get("Content-Type")
 
 
+#: Content types each media collection accepts (kept in sync with
+#: .actor/key_value_store_schema.json). Anything else means the URL served
+#: something other than the expected media — typically an error page.
+_IMAGE_CONTENT_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
+_VIDEO_CONTENT_TYPES = ("video/mp4",)
+
+
 def _record_content_type(resp_type, key):
-    """Prefer the response Content-Type; fall back to the extension default."""
+    """KV record content type for a downloaded asset, or None if not media.
+
+    Prefers the response Content-Type; an absent header falls back to the
+    extension default, which matches the collection by construction. A type
+    outside the collection's allow-list is rejected rather than stored.
+    """
     content_type = (resp_type or "").split(";", 1)[0].strip()
     if not content_type:
-        content_type = "video/mp4" if key.endswith(".mp4") else "image/jpeg"
-    return content_type
+        return "video/mp4" if key.endswith(".mp4") else "image/jpeg"
+    allowed = _VIDEO_CONTENT_TYPES if key.endswith(".mp4") else _IMAGE_CONTENT_TYPES
+    return content_type if content_type in allowed else None
 
 
 async def _upload_media(plan, doc_id):
-    """Download each planned asset and store it; return uploaded keys."""
+    """Download each planned asset and store it; return uploaded keys.
+
+    Every failure — download error, non-media response, storage error — just
+    skips the asset (leaving it out of the returned keys) and must never
+    abort the run or prevent the dataset item from being pushed.
+    """
     uploaded = []
     for entry in plan:
         try:
@@ -116,9 +134,25 @@ async def _upload_media(plan, doc_id):
                 _redact(exc),
             )
             continue
-        await Actor.set_value(
-            entry["key"], data, content_type=_record_content_type(resp_type, entry["key"])
-        )
+        content_type = _record_content_type(resp_type, entry["key"])
+        if content_type is None:
+            Actor.log.warning(
+                "Media URL for %s (item %s) served Content-Type %r instead of the expected media; skipping upload.",
+                _redact(entry["key"]),
+                doc_id,
+                resp_type,
+            )
+            continue
+        try:
+            await Actor.set_value(entry["key"], data, content_type=content_type)
+        except Exception as exc:
+            Actor.log.warning(
+                "Media upload failed for %s (item %s): %s",
+                _redact(entry["key"]),
+                doc_id,
+                _redact(exc),
+            )
+            continue
         uploaded.append(entry["key"])
     return uploaded
 
