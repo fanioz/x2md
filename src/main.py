@@ -101,18 +101,20 @@ _IMAGE_CONTENT_TYPES = ("image/jpeg", "image/png", "image/webp", "image/gif")
 _VIDEO_CONTENT_TYPES = ("video/mp4",)
 
 
-def _record_content_type(resp_type, kind):
+def _record_content_type(resp_type, kind, key):
     """KV record content type for a downloaded asset, or None if not media.
 
     Prefers the response Content-Type; an absent header falls back to the
-    asset kind's default, which matches the collection by construction. A
+    generated key's extension default, which matches the selected asset. A
     type outside the kind's allow-list is rejected rather than stored. GIF
     assets accept both their mp4 re-encode and the original static image,
     because providers do not always carry an mp4 variant.
     """
     content_type = (resp_type or "").split(";", 1)[0].strip()
     if not content_type:
-        return "video/mp4" if kind in ("video", "gif") else "image/jpeg"
+        if key.lower().endswith(".gif"):
+            return "image/gif"
+        return "video/mp4" if key.lower().endswith(".mp4") else "image/jpeg"
     if kind == "video":
         allowed = _VIDEO_CONTENT_TYPES
     elif kind == "gif":
@@ -141,7 +143,7 @@ async def _upload_media(plan, doc_id):
                 _redact(exc),
             )
             continue
-        content_type = _record_content_type(resp_type, entry["kind"])
+        content_type = _record_content_type(resp_type, entry["kind"], entry["key"])
         if content_type is None:
             Actor.log.warning(
                 "Media URL for %s (item %s) served Content-Type %r instead of the expected media; skipping upload.",

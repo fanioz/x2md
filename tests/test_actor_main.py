@@ -163,22 +163,23 @@ class MainSmokeTest(unittest.TestCase):
         try:
             # Real media types pass through; header parameters are stripped.
             self.assertEqual(
-                main._record_content_type("image/png; charset=binary", "image"),
+                main._record_content_type("image/png; charset=binary", "image", "image_jack_20_1_p0.jpg"),
                 "image/png",
             )
-            # Absent header falls back to the kind's extension default.
-            self.assertEqual(main._record_content_type(None, "image"), "image/jpeg")
-            self.assertEqual(main._record_content_type(None, "video"), "video/mp4")
+            # Absent headers fall back to the generated key's extension.
+            self.assertEqual(main._record_content_type(None, "image", "image_jack_20_1_p0.jpg"), "image/jpeg")
+            self.assertEqual(main._record_content_type(None, "video", "video_jack_20_1_p0.mp4"), "video/mp4")
+            self.assertEqual(main._record_content_type(None, "gif", "video_jack_20_1_p0.gif"), "image/gif")
             # Non-media responses (error pages) are rejected for every kind.
-            self.assertIsNone(main._record_content_type("text/html", "image"))
-            self.assertIsNone(main._record_content_type("application/json", "video"))
+            self.assertIsNone(main._record_content_type("text/html", "image", "image_jack_20_1_p0.jpg"))
+            self.assertIsNone(main._record_content_type("application/json", "video", "video_jack_20_1_p0.mp4"))
             # An image type on a video kind (the offline stub's default) is rejected too.
-            self.assertIsNone(main._record_content_type("image/png", "video"))
+            self.assertIsNone(main._record_content_type("image/png", "video", "video_jack_20_1_p0.mp4"))
             # GIF assets accept their mp4 re-encode and the original static
             # image (providers do not always carry an mp4 variant).
-            self.assertEqual(main._record_content_type("image/gif", "gif"), "image/gif")
-            self.assertEqual(main._record_content_type("video/mp4", "gif"), "video/mp4")
-            self.assertIsNone(main._record_content_type("text/html", "gif"))
+            self.assertEqual(main._record_content_type("image/gif", "gif", "video_jack_20_1_p0.gif"), "image/gif")
+            self.assertEqual(main._record_content_type("video/mp4", "gif", "video_jack_20_1_p0.mp4"), "video/mp4")
+            self.assertIsNone(main._record_content_type("text/html", "gif", "video_jack_20_1_p0.gif"))
         finally:
             sys.modules.pop("apify", None)
             sys.modules.pop("main", None)

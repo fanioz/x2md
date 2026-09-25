@@ -237,6 +237,28 @@ class MediaKeysTest(unittest.TestCase):
         video_key = actor_lib.media_file_key("video", "jack", "20", 0, 1758230400000)
         self.assertTrue(video_key.endswith(".mp4"))
 
+    def test_gif_assets_keep_their_selected_extension(self):
+        """Static GIFs use GIF keys; re-encoded GIFs retain MP4 keys."""
+        static_gif = x2md.Media(
+            kind="gif", url="https://pbs.twimg.com/media/static.gif?name=orig"
+        )
+        video_gif = x2md.Media(
+            kind="gif",
+            url="https://pbs.twimg.com/media/animated.gif?name=orig",
+            video_url="https://video.twimg.com/animated.mp4",
+        )
+        self.assertEqual(actor_lib.best_media_asset(static_gif)[1], "gif")
+        self.assertEqual(actor_lib.best_media_asset(video_gif)[1], "mp4")
+        ref = actor_lib.media_to_ref(
+            static_gif,
+            "jack",
+            "20",
+            0,
+            {"gifs": True},
+            1758230400000,
+        )
+        self.assertTrue(ref["fileKey"].endswith(".gif"))
+
     def test_iter_file_refs_thread_fallback_without_duplicates(self):
         """Nested-only threads expose refs via "thread"; "both" output yields once."""
         nested_only = {"thread": {"posts": [{"media": [{"fileKey": "image_jack_20_1_p0.jpg"}]}]}}

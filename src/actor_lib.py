@@ -118,9 +118,9 @@ def safe_handle(handle):
     return re.sub(r"[^A-Za-z0-9_]", "", handle or "") or "x"
 
 
-def media_file_key(kind, handle, post_id, index, run_ts):
+def media_file_key(kind, handle, post_id, index, run_ts, extension=None):
     """Build a stable media key within the image or video prefix."""
-    ext = "mp4" if kind in ("video", "gif") else "jpg"
+    ext = extension or ("mp4" if kind in ("video", "gif") else "jpg")
     prefix = "video" if kind in ("video", "gif") else "image"
     # "/" would be rejected by the key-value store, hence the "_" separator.
     return "%s_%s_%s_%d_p%d.%s" % (prefix, safe_handle(handle), post_id, run_ts, index, ext)
@@ -131,6 +131,9 @@ def best_media_asset(item):
     if item.kind == "image":
         url = x2md.upgrade_image_url(item.url)
         return (url, "jpg") if url else None
+    if item.kind == "gif" and not item.video_url:
+        url = x2md.upgrade_image_url(item.url)
+        return (url, "gif") if url else None
     download_url = item.video_url or x2md.upgrade_image_url(item.url)
     return (download_url, "mp4") if download_url else None
 
@@ -147,10 +150,12 @@ def plan_media_downloads(doc, download_media, run_ts):
             asset = best_media_asset(item)
             if asset is None:
                 continue
-            download_url, _ext = asset
+            download_url, extension = asset
             plan.append(
                 {
-                    "key": media_file_key(item.kind, post.author.handle, post_id, index, run_ts),
+                    "key": media_file_key(
+                        item.kind, post.author.handle, post_id, index, run_ts, extension
+                    ),
                     "download_url": download_url,
                 }
             )
@@ -169,7 +174,7 @@ def media_to_ref(item, handle, post_id, index, download_media, run_ts):
     }
     toggle = KIND_TO_TOGGLE[kind]
     if download_media.get(toggle) and asset is not None:
-        ref["fileKey"] = media_file_key(kind, handle, post_id, index, run_ts)
+        ref["fileKey"] = media_file_key(kind, handle, post_id, index, run_ts, asset[1])
     if kind == "video" and item.video_url:
         ref["videoVariants"] = [item.video_url]
     return ref
