@@ -1,0 +1,29 @@
+# Keep the build context (and the `apify push` upload) to what the Actor runs.
+.git/
+.github/
+.vercel/
+.zcode/
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Local Apify run state — never ship a developer's INPUT.json or scraped data.
+storage/
+
+# Web-app wrapper and docs are not part of the Actor image.
+api/
+public/
+tests/
+vercel.json
+CONTEXT.md
+MAINTENANCE.md
+CHANGELOG.md
+
+# Credentials
+.x2md_auth.json
+*.auth.json
+
+# CI workflow logs (apify.yml tee-s these into the repo root)
+docker-build.log
+apify-push.log

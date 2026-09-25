@@ -48,6 +48,49 @@ $ vercel dev
 
 The static frontend lives in `public/` and the API endpoint is `api/convert.py`.
 
+## Apify Actor
+
+The same core ships as an Apify Actor (`src/main.py`, config in `.actor/`):
+paste post, thread, or Article URLs and get one dataset item per URL with
+structured fields plus the full Markdown document. Original-resolution images
+and mp4 video/GIF sources can be uploaded to the key-value store (plus a ZIP
+bundle) via the granular `downloadMedia` toggles. No auth required; the
+Actor uses Apify Proxy when available (Residential recommended) and
+otherwise logs a warning and runs direct.
+
+Input: `startUrls` (URLs or bare IDs, max 50 per run), `maxItems`,
+`provider` (`auto` default: fxtwitter, then vxtwitter, syndication,
+graphql), `downloadMedia` (`images`/`videos`/`gifs`/`zip`), `outputFormat`
+(`flat`/`nested`/`both`). Each dataset item carries post fields, thread
+metadata, `markdown`, media references with `fileKey`, `warnings`, and
+`provider` + `providerErrors`; total provider failure yields a
+`failedProviders` chain. Dataset charges use the `dataset-item`
+Pay-Per-Event event. Optional GraphQL auth via secret environment variables
+`X2MD_GRAPHQL_QUERY_ID`, `X2MD_AUTH_TOKEN`, `X2MD_CT0`, `X2MD_BEARER_TOKEN`
+(set as secrets in the Apify Console); without them the graphql provider reports
+itself unavailable and the chain falls back.
+
+Run locally (the pinned `requirements.txt` resolves a working SDK set —
+install into a fresh venv and put it first on `PATH` so `apify run` picks it up):
+
+```console
+$ python3 -m venv .venv && . .venv/bin/activate
+$ pip install -r requirements.txt
+$ mkdir -p storage/key_value_stores/default
+$ cat > storage/key_value_stores/default/INPUT.json <<'EOF'
+{"startUrls": [{"url": "https://x.com/jack/status/20"}]}
+EOF
+$ apify run
+```
+
+Or exercise the mapping layer without the SDK or network:
+
+```console
+$ python3 -m unittest discover -s tests -p "test_actor*.py"
+```
+
+Deploy with `apify push` (actor name `x2md-twitter-post-scraper`).
+
 ## Usage
 
 ```
@@ -298,6 +341,25 @@ This section separates what was actually measured from what was not.
   is the poster thumbnail (as specified); the mp4 is a nested secondary link.
 * **Bold/italic facets are not rendered.** `raw_text.facets` can carry `bold` ranges; they are
   left as plain text.
+* **Two floating transitive dependencies of the Apify SDK break on upgrade.**
+  An unpinned `pip install apify==2.7.3` resolves `pydantic>=2.12` (turns
+  crawlee 0.6.12's `Field(default=..., default_factory=...)` into a hard
+  `TypeError` at import) and `browserforge==1.2.4` (drops `DATA_FILES`, which
+  crawlee still reads). Both break `from apify import Actor` before `main()`
+  runs. `requirements.txt` pins the known-good set
+  (`pydantic==2.11.10`, `browserforge==1.2.3`, plus the full transitive tree),
+  and the Dockerfile imports the SDK at build time so this class of failure
+  fails the build instead of a paid run.
+* **Verified end to end as of 2026-09-24.** Docker build, `apify run` (real
+  CLI against the pinned SDK), and a run of the built container all exit 0 and
+  emit a dataset item; the container run fetched a live post from
+  `api.fxtwitter.com`. Still unverified: the Apify Proxy path (requires a plan
+  with proxy access) and Pay-Per-Event charging (requires the pricing to be
+  configured in the Apify Console).
+* **Live behaviour through the Apify Proxy is unverified.** All offline
+  validation uses recorded fixtures (`tests/test_actor*.py`); the direct
+  container fetch succeeded, but proxied requests, residential-IP handling,
+  and PPE charging only run on the platform.
 
 ### Legal / etiquette
 
@@ -309,12 +371,12 @@ retries conservatively by design), and do not use it to bulk-harvest content.
 
 ## Tests
 
-193 tests, entirely offline against recorded fixtures — no network access at all.
+230 tests, entirely offline against recorded fixtures — no network access at all.
 
 ```console
 $ python3 -m unittest discover -s tests
 ----------------------------------------------------------------------
-Ran 193 tests in 0.572s
+Ran 230 tests in 2.198s
 
 OK
 ```
@@ -332,10 +394,14 @@ connection attempt raises immediately:
 ```console
 $ X2MD_TEST_BLOCK_NETWORK=1 python3 -m unittest discover -s tests
 ----------------------------------------------------------------------
-Ran 193 tests in 0.528s
+Ran 230 tests in 0.551s
 
-OK
+OK (skipped=3)
 ```
+
+(The three skipped tests are the real-SDK harnesses in `tests/test_actor_sdk.py`
+and `tests/test_actor_main.py`: the Apify SDK's event loop needs a socketpair.
+CI runs them in a separate, unguarded step.)
 
 Fixtures live in `tests/fixtures/`; `fixtures/README.md` records the provenance of each
 one and marks the two that are synthetic or schema-derived rather than captured live.

@@ -1,0 +1,54 @@
+name: Release
+
+# Create a git tag and GitHub Release when VERSION changes on main.
+# The release notes are extracted from the corresponding CHANGELOG section.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  tag-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Read VERSION
+        id: version
+        run: |
+          VERSION=$(cat VERSION | tr -d '[:space:]')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - name: Check if tag exists
+        id: check_tag
+        run: |
+          if git rev-parse "v${VERSION}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract changelog section
+        if: steps.check_tag.outputs.exists == 'false'
+        id: changelog
+        run: |
+          SECTION=$(awk "/^## \\[${VERSION//./\\.}\\] - /{flag=1; next} /^## \\[/{flag=0} /^\\[.*\\]: /{flag=0} flag" CHANGELOG.md)
+          if [ -z "$SECTION" ]; then echo "::error::No CHANGELOG.md section found for version $VERSION"; exit 1; fi
+          echo "section<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$SECTION" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag and release
+        if: steps.check_tag.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          target_commitish: ${{ github.sha }}
+          tag_name: v${{ steps.version.outputs.version }}
+          name: v${{ steps.version.outputs.version }}
+          body: ${{ steps.changelog.outputs.section }}

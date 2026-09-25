@@ -1,0 +1,90 @@
+{
+  "title": "x2md Twitter Post Scraper",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "startUrls": {
+      "title": "Post URLs or IDs",
+      "type": "array",
+      "description": "X/Twitter post, thread, or Article URLs (or bare numeric IDs) to scrape. One dataset item is produced per entry.",
+      "editor": "requestListSources",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "URL",
+            "description": "Post/Article URL or bare numeric status ID."
+          }
+        },
+        "required": ["url"]
+      },
+      "default": [{ "url": "https://x.com/jack/status/20" }],
+      "prefill": [{ "url": "https://x.com/jack/status/20" }]
+    },
+    "maxItems": {
+      "title": "Max items",
+      "type": "integer",
+      "description": "Maximum number of start URLs to process per run (hard cap 50, matching platform memory limits).",
+      "default": 10,
+      "minimum": 1,
+      "maximum": 50
+    },
+    "provider": {
+      "title": "Provider",
+      "type": "string",
+      "description": "Retrieval strategy. Auto tries fxtwitter (threads + Articles) then falls back to vxtwitter, syndication, and graphql.",
+      "default": "auto",
+      "enum": ["auto", "fxtwitter", "vxtwitter", "syndication", "graphql"],
+      "enumTitles": ["Auto (recommended)", "FxTwitter", "VxTwitter", "Syndication", "GraphQL"]
+    },
+    "downloadMedia": {
+      "title": "Download media files",
+      "type": "object",
+      "description": "Upload original-resolution images and mp4 video/GIF sources to the key-value store (plus an optional ZIP bundle). Off by default; URLs are always returned.",
+      "editor": "schemaBased",
+      "properties": {
+        "images": {
+          "title": "Download images",
+          "type": "boolean",
+          "description": "Upload original-resolution images to the key-value store.",
+          "default": false
+        },
+        "videos": {
+          "title": "Download videos",
+          "type": "boolean",
+          "description": "Upload the best mp4 source of each video to the key-value store.",
+          "default": false
+        },
+        "gifs": {
+          "title": "Download GIFs",
+          "type": "boolean",
+          "description": "Upload the mp4 source of each GIF to the key-value store.",
+          "default": false
+        },
+        "zip": {
+          "title": "Bundle media as ZIP",
+          "type": "boolean",
+          "description": "Store all downloaded media for the run as a single ZIP file.",
+          "default": false
+        }
+      }
+    },
+    "outputFormat": {
+      "title": "Thread output format",
+      "type": "string",
+      "description": "Flat emits one post list per item; nested adds a thread object; both emits both.",
+      "default": "both",
+      "enum": ["flat", "nested", "both"],
+      "enumTitles": ["Flat", "Nested", "Both"]
+    },
+    "proxyConfiguration": {
+      "title": "Proxy configuration",
+      "type": "object",
+      "description": "Residential proxy is strongly recommended: scraping without one risks IP blocks.",
+      "editor": "proxy",
+      "default": { "useApifyProxy": true, "apifyProxyGroups": ["RESIDENTIAL"] }
+    }
+  },
+  "required": ["startUrls"]
+}
