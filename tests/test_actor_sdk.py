@@ -33,6 +33,7 @@ if routes_json:
 
 
 def _sdk_importable():
+    """Return whether the real Apify SDK can load in this interpreter."""
     try:
         __import__("apify")
     except Exception:

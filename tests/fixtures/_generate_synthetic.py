@@ -61,6 +61,7 @@ PARAGRAPH = (
 
 
 def make_post(index, total, replying_to_self):
+    """Create one synthetic FxTwitter post with optional self-reply metadata."""
     post_id = str(BASE_ID + index)
     post = {
         "type": "status",
@@ -90,6 +91,7 @@ def make_post(index, total, replying_to_self):
 
 
 def write(name, payload):
+    """Write a deterministic JSON fixture beside this generator."""
     path = HERE / name
     with open(path, "w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2, ensure_ascii=False)
@@ -98,6 +100,7 @@ def write(name, payload):
 
 
 def main():
+    """Regenerate the long and incomplete thread fixtures."""
     # 100-post thread: the focal post opens it, every later post is a self-reply.
     posts = [make_post(i, 100, replying_to_self=i > 0) for i in range(100)]
     write(

@@ -38,6 +38,7 @@ class FakeActor:
     proxy_url = None
 
     def __init__(self):
+        """Initialize empty input, output, storage, and proxy state."""
         FakeActor.Instance = self
         self.input = {}
         self.pushed = []
@@ -45,35 +46,44 @@ class FakeActor:
         self.proxy_url = None
 
     async def __aenter__(self):
+        """Enter the fake Actor context."""
         return self
 
     async def __aexit__(self, *args):
+        """Leave the fake Actor context without suppressing errors."""
         return False
 
     async def get_input(self):
+        """Return a copy of the configured Actor input."""
         return dict(self.input)
 
     async def push_data(self, data, event_name=None):
+        """Record a dataset item and its optional charge event."""
         self.pushed.append((data, event_name))
 
     async def set_value(self, key, value, content_type=None):
+        """Record bytes and content type under a storage key."""
         self.stored[key] = (bytes(value), content_type)
 
     async def get_value(self, key):
+        """Return stored bytes for a key, if present."""
         record = self.stored.get(key)
         return record[0] if record else None
 
     async def create_proxy_configuration(self):
+        """Simulate an Actor run without a configured proxy."""
         return None
 
     @property
     def log(self):
+        """Provide the logger used by the Actor entry point."""
         import logging
 
         return logging.getLogger("actor-smoke")
 
 
 def load_main_with_stub():
+    """Import the entry point against a fresh fake Apify module."""
     import types
 
     stub = types.ModuleType("apify")
@@ -89,6 +99,7 @@ def load_main_with_stub():
 
 class MainSmokeTest(unittest.TestCase):
     def test_full_run_offline(self):
+        """The entry point publishes items, media, and a ZIP offline."""
         _support.install_fake_http(
             {
                 "https://api.fxtwitter.com/2/thread/20": "fxtwitter_v2_status_simple.json",

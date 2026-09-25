@@ -42,6 +42,7 @@ _CENSORED_PATTERNS = ("auth_token", "ct0", "bearer_token", "X2MD_")
 
 
 def _redact(text):
+    """Mask known credential names and their values in log messages."""
     for pattern in _CENSORED_PATTERNS:
         text = re.sub(
             r"(?i)(%s[\"'\s:=]+)([^\s\"',}]+)" % re.escape(pattern),
@@ -78,6 +79,7 @@ def _install_proxy_opener(proxy_url):
 
 
 def _download_bytes(url, timeout=30):
+    """Fetch a media asset using the process's configured urllib opener."""
     request = urllib.request.Request(url, headers={"User-Agent": "x2md-actor/%s" % x2md.__version__})
     with urllib.request.urlopen(request, timeout=timeout) as resp:
         return resp.read()
@@ -120,6 +122,7 @@ async def _upload_zip(keys, run_ts):
 
 
 async def main():
+    """Process Actor input and publish dataset items and requested media."""
     async with Actor:
         raw_input = await Actor.get_input() or {}
         try:

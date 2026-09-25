@@ -46,6 +46,7 @@ class ActorInputError(ValueError):
 
 
 def error_to_dict(exc):
+    """Serialize a provider failure for the dataset's error list."""
     return {
         "provider": exc.provider,
         "message": exc.message,
@@ -111,10 +112,12 @@ def validate_input(raw):
 
 
 def safe_handle(handle):
+    """Keep only characters safe for an Apify media storage key."""
     return re.sub(r"[^A-Za-z0-9_]", "", handle or "") or "x"
 
 
 def media_file_key(kind, handle, post_id, index, run_ts):
+    """Build a stable media key within the image or video prefix."""
     ext = "mp4" if kind in ("video", "gif") else "jpg"
     prefix = "video" if kind in ("video", "gif") else "image"
     return "%s/%s_%s_%d_p%d.%s" % (prefix, safe_handle(handle), post_id, run_ts, index, ext)
@@ -152,6 +155,7 @@ def plan_media_downloads(doc, download_media, run_ts):
 
 
 def media_to_ref(item, handle, post_id, index, download_media, run_ts):
+    """Map one media asset to its public URL and optional stored file key."""
     kind = item.kind if item.kind in ("image", "video", "gif") else "image"
     asset = best_media_asset(item)
     ref = {
@@ -209,6 +213,7 @@ def post_to_payload(post, doc, position, download_media, run_ts, cli_post=None):
 
 
 def document_to_item(doc, errors, download_media, output_format, run_ts):
+    """Convert a fetched document to flat and/or nested Actor output."""
     # One pass through x2md's own JSON serializer gives every post its CLI
     # representation; post_to_payload reuses the poll/quote/article branches
     # from it instead of duplicating that logic.
@@ -246,6 +251,7 @@ def document_to_item(doc, errors, download_media, output_format, run_ts):
 
 
 def failure_item(url, status_id, errors):
+    """Describe a URL for which every provider failed."""
     return {
         "id": status_id,
         "url": url,

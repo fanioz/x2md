@@ -47,6 +47,7 @@ def routes_for(status_id, thread_fixture=None, status_fixture=STATUS_SIMPLE):
 
 class ValidateInputTest(unittest.TestCase):
     def test_valid_minimal_input_defaults_media_off(self):
+        """Minimal input gets defaults without media downloads."""
         cleaned = actor_lib.validate_input({"startUrls": ["https://x.com/jack/status/20"]})
         self.assertEqual(cleaned["maxItems"], 10)
         self.assertEqual(cleaned["provider"], "auto")
@@ -54,46 +55,56 @@ class ValidateInputTest(unittest.TestCase):
         self.assertFalse(any(cleaned["downloadMedia"].values()))
 
     def test_bare_id_accepted(self):
+        """A bare post ID is accepted as a start URL."""
         cleaned = actor_lib.validate_input({"startUrls": ["20"]})
         self.assertEqual(cleaned["startUrls"], ["20"])
 
     def test_request_list_sources_objects_accepted(self):
+        """Request-list objects are reduced to their URL strings."""
         cleaned = actor_lib.validate_input({"startUrls": [{"url": "https://x.com/jack/status/20"}]})
         self.assertEqual(cleaned["startUrls"], ["https://x.com/jack/status/20"])
 
     def test_missing_start_urls_rejected(self):
+        """Input without startUrls is rejected."""
         with self.assertRaises(actor_lib.ActorInputError):
             actor_lib.validate_input({})
 
     def test_empty_start_urls_rejected(self):
+        """An empty startUrls list is rejected."""
         with self.assertRaises(actor_lib.ActorInputError):
             actor_lib.validate_input({"startUrls": []})
 
     def test_max_items_above_cap_is_rejected(self):
+        """The platform item cap rejects larger maxItems values."""
         with self.assertRaises(actor_lib.ActorInputError):
             actor_lib.validate_input(
                 {"startUrls": ["https://x.com/jack/status/20"], "maxItems": 500}
             )
 
     def test_max_items_at_cap_is_accepted(self):
+        """The maximum permitted maxItems value is accepted."""
         cleaned = actor_lib.validate_input(
             {"startUrls": ["https://x.com/jack/status/20"], "maxItems": 50}
         )
         self.assertEqual(cleaned["maxItems"], 50)
 
     def test_max_items_floor(self):
+        """Zero maxItems is rejected."""
         with self.assertRaises(actor_lib.ActorInputError):
             actor_lib.validate_input({"startUrls": ["20"], "maxItems": 0})
 
     def test_unknown_provider_rejected(self):
+        """Unknown provider names are rejected."""
         with self.assertRaises(actor_lib.ActorInputError):
             actor_lib.validate_input({"startUrls": ["20"], "provider": "carrier-pigeon"})
 
     def test_bad_output_format_rejected(self):
+        """Unknown output formats are rejected."""
         with self.assertRaises(actor_lib.ActorInputError):
             actor_lib.validate_input({"startUrls": ["20"], "outputFormat": "sideways"})
 
     def test_partial_download_media_toggles(self):
+        """Unspecified media toggles stay disabled."""
         cleaned = actor_lib.validate_input(
             {"startUrls": ["20"], "downloadMedia": {"images": True}}
         )
@@ -103,6 +114,7 @@ class ValidateInputTest(unittest.TestCase):
 
 class FetchOneTest(unittest.TestCase):
     def test_single_post_first_provider_wins(self):
+        """A successful first provider supplies the single-post item."""
         fake = _support.install_fake_http(routes_for("20"))
         try:
             item = actor_lib.fetch_one("https://x.com/jack/status/20", BASE_INPUT)
@@ -117,6 +129,7 @@ class FetchOneTest(unittest.TestCase):
         self.assertEqual(item["posts"][0]["threadPosition"], None)
 
     def test_total_failure_yields_failed_providers_chain(self):
+        """Total failure preserves each attempted provider error."""
         fake = _support.install_fake_http(
             {"https://api.fxtwitter.com": (200, '{"code":404,"message":"NOT_FOUND"}')}
         )
@@ -131,6 +144,7 @@ class FetchOneTest(unittest.TestCase):
         self.assertIn("syndication", names)
 
     def test_invalid_url_reported_as_item_error(self):
+        """Malformed URLs produce an item-level error."""
         item = actor_lib.fetch_one("not a url at all !!!", BASE_INPUT)
         self.assertIn("error", item)
         self.assertIn("url", item)
@@ -138,6 +152,7 @@ class FetchOneTest(unittest.TestCase):
 
 class ThreadMappingTest(unittest.TestCase):
     def test_thread_flat_and_nested(self):
+        """Thread output includes ordered flat and nested posts."""
         _support.install_fake_http(routes_for("2072439205213421694", THREAD5, THREAD5))
         try:
             item = actor_lib.fetch_one(THREAD_URL, BASE_INPUT)
@@ -151,6 +166,7 @@ class ThreadMappingTest(unittest.TestCase):
         self.assertEqual(len(item["thread"]["posts"]), 5)
 
     def test_flat_only_omits_nested_thread(self):
+        """Flat output omits the nested thread object."""
         _support.install_fake_http(routes_for("2072439205213421694", THREAD5, THREAD5))
         try:
             item = actor_lib.fetch_one(THREAD_URL, dict(BASE_INPUT, outputFormat="flat"))
@@ -162,6 +178,7 @@ class ThreadMappingTest(unittest.TestCase):
 
 class MediaKeysTest(unittest.TestCase):
     def test_video_gets_mp4_file_key_with_timestamp(self):
+        """Video downloads receive bounded timestamped MP4 keys."""
         _support.install_fake_http(routes_for("2095249317875622255", VIDEO, VIDEO))
         try:
             item = actor_lib.fetch_one(VIDEO_URL, BASE_INPUT)
@@ -176,6 +193,7 @@ class MediaKeysTest(unittest.TestCase):
         self.assertLessEqual(len(key), 256)
 
     def test_media_disabled_yields_null_file_keys(self):
+        """Disabled media downloads leave file keys unset."""
         _support.install_fake_http(routes_for("2095249317875622255", VIDEO, VIDEO))
         no_media = dict(BASE_INPUT, downloadMedia={})
         try:
@@ -185,6 +203,7 @@ class MediaKeysTest(unittest.TestCase):
         self.assertIsNone(item["posts"][0]["media"][0]["fileKey"])
 
     def test_kv_key_helpers(self):
+        """Media key helpers choose the expected prefixes and extensions."""
         key = actor_lib.media_file_key("image", "jack", "20", 0, 1758230400000)
         self.assertEqual(key, "image/jack_20_1758230400000_p0.jpg")
         video_key = actor_lib.media_file_key("video", "jack", "20", 0, 1758230400000)
@@ -193,6 +212,7 @@ class MediaKeysTest(unittest.TestCase):
 
 class MediaDownloadPlanTest(unittest.TestCase):
     def test_plan_lists_best_asset_per_toggle(self):
+        """Download plans select the best enabled media asset."""
         _support.install_fake_http(routes_for("2095249317875622255", VIDEO, VIDEO))
         try:
             target = x2md.parse_target(VIDEO_URL)
@@ -207,6 +227,7 @@ class MediaDownloadPlanTest(unittest.TestCase):
         self.assertTrue(plan[0]["key"].endswith(".mp4"))
 
     def test_plan_empty_when_toggles_off(self):
+        """No downloads are planned when all toggles are off."""
         _support.install_fake_http(routes_for("2095249317875622255", VIDEO, VIDEO))
         try:
             target = x2md.parse_target(VIDEO_URL)
@@ -220,6 +241,7 @@ class MediaDownloadPlanTest(unittest.TestCase):
 
 class RunBatchTest(unittest.TestCase):
     def test_batch_respects_max_items(self):
+        """Batch processing stops at the configured item limit."""
         _support.install_fake_http(
             {
                 **routes_for("20"),
@@ -243,6 +265,7 @@ class RunBatchTest(unittest.TestCase):
         self.assertEqual(result["items"][0]["id"], "20")
 
     def test_zip_key_present_when_requested(self):
+        """A requested media bundle receives a ZIP storage key."""
         _support.install_fake_http(routes_for("2095249317875622255", VIDEO, VIDEO))
         single_video = dict(
             BASE_INPUT, startUrls=["https://x.com/imagine/status/2095249317875622255"]
@@ -256,6 +279,7 @@ class RunBatchTest(unittest.TestCase):
 
 class ThreadCompletenessTest(unittest.TestCase):
     def test_incomplete_self_reply_warns_thread_incomplete(self):
+        """A missing self-thread sibling marks the result incomplete."""
         url = "https://x.com/threadsmith/status/1900000000000000041"
         _support.install_fake_http(routes_for("1900000000000000041", THREAD_INCOMPLETE, THREAD_INCOMPLETE))
         try:
@@ -269,6 +293,7 @@ class ThreadCompletenessTest(unittest.TestCase):
         self.assertIs(item["posts"][0]["threadComplete"], False)
 
     def test_complete_thread_does_not_warn(self):
+        """A complete thread has no incompleteness warning."""
         _support.install_fake_http(routes_for("2072439205213421694", THREAD5, THREAD5))
         try:
             item = actor_lib.fetch_one(THREAD_URL, BASE_INPUT)
@@ -335,6 +360,7 @@ class PollQuoteArticleTest(unittest.TestCase):
             _support.restore_http()
 
     def test_poll_fields_match_cli(self):
+        """Actor poll fields match the CLI JSON serializer."""
         item, doc = self._fetch_doc("1780000000000000001", POLL)
         post = item["posts"][0]
         self.assertIsNotNone(post["poll"])
@@ -344,6 +370,7 @@ class PollQuoteArticleTest(unittest.TestCase):
         self.assertEqual(post["poll"], cli_poll)
 
     def test_quote_fields_match_cli(self):
+        """Actor quote fields match the CLI JSON serializer."""
         item, doc = self._fetch_doc("2099922471272976442", QUOTE)
         post = item["posts"][0]
         self.assertIsNotNone(post["quote"])
@@ -353,6 +380,7 @@ class PollQuoteArticleTest(unittest.TestCase):
         self.assertEqual(post["quote"], cli_quote)
 
     def test_article_fields_match_cli(self):
+        """Actor article fields match the CLI JSON serializer."""
         item, doc = self._fetch_doc("2097390372670575039", ARTICLE)
         post = item["posts"][0]
         self.assertIsNotNone(post["article"])
@@ -362,6 +390,7 @@ class PollQuoteArticleTest(unittest.TestCase):
         self.assertEqual(post["article"], cli_article)
 
     def test_article_with_media_keeps_cover_media_shape(self):
+        """Article cover media survives Actor mapping."""
         url = "https://x.com/example/status/2085835082166653393"
         _support.install_fake_http(routes_for("2085835082166653393", ARTICLE_MEDIA, ARTICLE_MEDIA))
         try:
